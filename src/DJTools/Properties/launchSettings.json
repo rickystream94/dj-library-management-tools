@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DJTools": {
+      "commandName": "Project",
+      "commandLineArgs": "--help"
+    }
+  }
+}

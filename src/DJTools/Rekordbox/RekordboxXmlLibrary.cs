@@ -6,8 +6,8 @@ public sealed class RekordboxXmlLibrary
 {
     private RekordboxXmlLibrary(string path, XmlDocument doc)
     {
-        Path = path;
-        Document = doc;
+        this.Path = path;
+        this.Document = doc;
     }
 
     public string Path { get; }
@@ -20,66 +20,84 @@ public sealed class RekordboxXmlLibrary
         return new RekordboxXmlLibrary(xmlPath, doc);
     }
 
-    public XmlNode? FindLibraryManagementNode()
+    public static string DecodeFileUri(string raw)
+    {
+        if (string.IsNullOrEmpty(raw))
+            return raw;
+        var cleaned = raw.Replace(Constants.LocalFileUriPrefix, string.Empty);
+        return Uri.UnescapeDataString(cleaned);
+    }
+
+    public static void UpdatePlaylistTracksCount(XmlElement playlistNode, int count)
+    {
+        playlistNode.SetAttribute(Constants.EntriesAttributeName, count.ToString());
+    }
+
+    public XmlNode? GetLibraryManagementFolder()
     {
         // DJ_PLAYLISTS/PLAYLISTS/NODE/NODE with Name="LIBRARY MANAGEMENT"
-        return Document.SelectSingleNode("/DJ_PLAYLISTS/PLAYLISTS/NODE/NODE[@Name='LIBRARY MANAGEMENT']");
+        return this.Document.SelectSingleNode($"/DJ_PLAYLISTS/PLAYLISTS/NODE/NODE[@Name='{Constants.LibraryManagement}']");
     }
 
     public IEnumerable<XmlElement> GetCollectionTracks()
     {
-        var list = Document.SelectNodes("/DJ_PLAYLISTS/COLLECTION/TRACK");
-        if (list == null) yield break;
-        foreach (XmlElement el in list) yield return el;
+        var tracks = this.Document.SelectNodes("/DJ_PLAYLISTS/COLLECTION/TRACK");
+        if (tracks == null)
+            yield break;
+        foreach (XmlElement el in tracks)
+            yield return el;
     }
 
-    public IEnumerable<XmlElement> GetPlaylistTrackElements(string playlistName)
+    public IEnumerable<XmlElement> GetTracksToDelete()
     {
-        var lm = FindLibraryManagementNode();
-        if (lm == null) yield break;
-        var pl = lm.SelectSingleNode($"NODE[@Name='{playlistName}']");
-        if (pl == null) yield break;
+        var libraryManagementFolder = GetLibraryManagementFolder();
+        if (libraryManagementFolder == null)
+            yield break;
+
+        var pl = libraryManagementFolder.SelectSingleNode($"NODE[@Name='{Constants.DeletePlaylistName}']");
+        if (pl == null)
+            yield break;
+
         var tracks = pl.SelectNodes("TRACK");
-        if (tracks == null) yield break;
-        foreach (XmlElement t in tracks) yield return t;
+        if (tracks == null)
+            yield break;
+        foreach (XmlElement t in tracks)
+            yield return t;
     }
 
-    public XmlElement EnsurePlaylist(string playlistName)
+    public XmlElement InitializePlaylist(string playlistName)
     {
-        var lm = FindLibraryManagementNode() ?? throw new InvalidOperationException("'LIBRARY MANAGEMENT' playlist folder not found in XML.");
-        var existing = lm.SelectSingleNode($"NODE[@Name='{playlistName}']") as XmlElement;
-        if (existing != null)
+        var libraryManagementFolder = GetLibraryManagementFolder() ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found in XML.");
+        if (libraryManagementFolder.SelectSingleNode($"NODE[@Name='{playlistName}']") is XmlElement existingPlaylist)
         {
-            existing.RemoveAll();
-            existing.SetAttribute("Name", playlistName);
-            existing.SetAttribute("Type", "1");
-            existing.SetAttribute("KeyType", "0");
-            existing.SetAttribute("Entries", "0");
-            return existing;
+            existingPlaylist.RemoveAll();
+            SetPlaylistAttributes(existingPlaylist, playlistName);
+            return existingPlaylist;
         }
-        var newNode = Document.CreateElement("NODE");
-        newNode.SetAttribute("Name", playlistName);
-        newNode.SetAttribute("Type", "1");
-        newNode.SetAttribute("KeyType", "0");
-        newNode.SetAttribute("Entries", "0");
-        lm.AppendChild(newNode);
-        return newNode;
+
+        var newPlaylist = this.Document.CreateElement("NODE");
+        SetPlaylistAttributes(newPlaylist, playlistName);
+        libraryManagementFolder.AppendChild(newPlaylist);
+        return newPlaylist;
     }
 
     public void AddTrackToPlaylist(XmlElement playlistNode, string trackId)
     {
-        var trackNode = Document.CreateElement("TRACK");
-        trackNode.SetAttribute("Key", trackId);
+        var trackNode = this.Document.CreateElement("TRACK");
+        trackNode.SetAttribute(Constants.KeyAttributeName, trackId);
         playlistNode.AppendChild(trackNode);
-    }
-
-    public void UpdatePlaylistCount(XmlElement playlistNode, int count)
-    {
-        playlistNode.SetAttribute("Entries", count.ToString());
     }
 
     public void SaveAs(string outputPath)
     {
-        Document.Save(outputPath);
+        this.Document.Save(outputPath);
+    }
+
+    private static void SetPlaylistAttributes(XmlElement playlistNode, string playlistName)
+    {
+        playlistNode.SetAttribute(Constants.NameAttributeName, playlistName);
+        playlistNode.SetAttribute(Constants.TypeAttributeName, "1");
+        playlistNode.SetAttribute(Constants.KeyTypeAttributeName, "0");
+        playlistNode.SetAttribute(Constants.EntriesAttributeName, "0");
     }
 }

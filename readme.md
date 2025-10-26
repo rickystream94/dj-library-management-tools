@@ -334,8 +334,8 @@ DJTools.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" --what-if
 DJTools.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml"
 
 # Sync MIK key (M4A only) & energy colors
-DJTools.exe sync-mik --xml "D:\RekordboxExports\rekordbox.xml"
-DJTools.exe sync-mik --xml "D:\RekordboxExports\rekordbox.xml" --mapping "c:\path\to\EnergyLevelToColorCode.json"
+DJTools.exe sync-mik-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml"
+DJTools.exe sync-mik-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" --mapping "c:\path\to\EnergyLevelToColorCode.json"
 ```
 
 ### Differences vs PowerShell scripts
@@ -346,13 +346,6 @@ DJTools.exe sync-mik --xml "D:\RekordboxExports\rekordbox.xml" --mapping "c:\pat
 | Extensibility | Edit script | Add C# handlers / services |
 | Mapping file path | Fixed relative | Configurable via `--mapping` |
 | Error handling | Basic try/catch | Structured exceptions (expandable) |
-
-### Roadmap Ideas
-- Add structured logging & persistent log files.
-- Add dry-run flag for `sync-mik`.
-- Global tool publishing (`dotnet tool install`).
-- Playlist import into Mixed In Key.
-- Unit tests for XML parsing & transformations.
 
 ---
 

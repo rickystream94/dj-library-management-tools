@@ -9,7 +9,7 @@ internal static class Program
     private static async Task<int> Main(string[] args)
     {
         // Root command description
-        var root = new RootCommand("DJTools - Rekordbox & Mixed In Key library management CLI");
+        var root = new RootCommand("Library Management Tools for DJs - CLI");
 
         // Shared option
         var xmlOption = new Option<FileInfo>(name: "--xml", description: "Path to Rekordbox exported collection XML", parseArgument: result =>
@@ -29,8 +29,8 @@ internal static class Program
         }) { IsRequired = true };
 
         // delete-tracks command
-        var whatIfOption = new Option<bool>("--what-if", () => false, "Simulate deletions without removing any files");
-        var deleteCmd = new Command("delete-tracks", "Delete tracks whose IDs live in 'LIBRARY MANAGEMENT > Delete' playlist")
+        var whatIfOption = new Option<bool>("--what-if", () => false, description: "Simulate deletions without removing any files");
+        var deleteCmd = new Command("delete-tracks", $"Bulk delete tracks marked for deletion, if they're added to the '{Constants.LibraryManagement} > {Constants.DeletePlaylistName}' playlist")
         {
             xmlOption,
             whatIfOption
@@ -43,20 +43,18 @@ internal static class Program
             await handler.RunAsync(library, whatIf);
         }, xmlOption, whatIfOption);
 
-        // sync-mik command
-        var mappingOption = new Option<FileInfo?>("--mapping", "Optional path to EnergyLevelToColorCode.json mapping file (defaults to same folder as executable)");
-        var syncCmd = new Command("sync-mik", "Sync Mixed In Key key (M4A only) & energy (color) info, producing a new XML & playlists")
+        // sync-mik-to-rekordbox command
+        var syncCmd = new Command("sync-mik-to-rekordbox", "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
         {
-            xmlOption,
-            mappingOption
+            xmlOption
         };
-        syncCmd.SetHandler(async (FileInfo xml, FileInfo? mapping) =>
+        syncCmd.SetHandler(async (FileInfo xml) =>
         {
             var console = new ConsoleLogger();
             var library = RekordboxXmlLibrary.Load(xml.FullName);
-            var handler = new SyncMixedInKeyHandler(console);
-            await handler.RunAsync(library, mapping?.FullName);
-        }, xmlOption, mappingOption);
+            var handler = new SyncMixedInKeyTagsToRekordboxHandler(console);
+            await handler.RunAsync(library);
+        }, xmlOption);
 
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);

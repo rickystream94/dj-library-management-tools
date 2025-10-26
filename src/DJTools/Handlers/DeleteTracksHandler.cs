@@ -1,5 +1,4 @@
 using DJTools.Rekordbox;
-using System.Xml;
 
 namespace DJTools.Handlers;
 
@@ -10,24 +9,30 @@ public sealed class DeleteTracksHandler
 
     public Task RunAsync(RekordboxXmlLibrary library, bool whatIf)
     {
-        var deletePlaylistTracks = library.GetPlaylistTrackElements("Delete").ToList();
-        if (!deletePlaylistTracks.Any())
+        var deletePlaylistTracks = library.GetTracksToDelete().ToList();
+        if (deletePlaylistTracks.Count == 0)
         {
             _log.Warn("No 'Delete' playlist or no tracks found. Aborting delete operation.");
             return Task.CompletedTask;
         }
 
-        var trackIds = deletePlaylistTracks.Select(t => t.GetAttribute("Key")).Where(id => !string.IsNullOrWhiteSpace(id)).ToHashSet();
-        var collectionTracks = library.GetCollectionTracks().Where(t => trackIds.Contains(t.GetAttribute("TrackID"))).ToList();
+        var trackIdsToDelete = deletePlaylistTracks
+            .Select(t => t.GetAttribute(Constants.KeyAttributeName))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet();
+        var tracksToDelete = library.GetCollectionTracks()
+            .Where(t => trackIdsToDelete.Contains(t.GetAttribute(Constants.TrackIdAttributeName)))
+            .ToList();
 
-        _log.Info($"Found {collectionTracks.Count} tracks in collection matching Delete playlist IDs.");
-        if (collectionTracks.Count == 0) return Task.CompletedTask;
+        _log.Info($"Found {tracksToDelete.Count} tracks to be deleted.");
+        if (tracksToDelete.Count == 0)
+            return Task.CompletedTask;
 
         int deleted = 0, failed = 0, missing = 0;
-        foreach (var track in collectionTracks)
+        foreach (var track in tracksToDelete)
         {
-            var location = track.GetAttribute("Location");
-            var filePath = DecodeFileUri(location);
+            var location = track.GetAttribute(Constants.LocationAttributeName);
+            var filePath = RekordboxXmlLibrary.DecodeFileUri(location);
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
                 _log.Warn($"Track file not found: {filePath}");
@@ -55,14 +60,7 @@ public sealed class DeleteTracksHandler
             }
         }
 
-        _log.Info($"Summary -> Deleted: {deleted}, Failed: {failed}, Missing: {missing}, Total targeted: {collectionTracks.Count}");
+        _log.Info($"Summary:\nDeleted: {deleted}\nFailed: {failed}\nMissing: {missing}\nTotal targeted: {tracksToDelete.Count}");
         return Task.CompletedTask;
-    }
-
-    private static string DecodeFileUri(string raw)
-    {
-        if (string.IsNullOrEmpty(raw)) return raw;
-        var cleaned = raw.Replace("file://localhost/", string.Empty);
-        return Uri.UnescapeDataString(cleaned);
     }
 }
