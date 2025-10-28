@@ -1,4 +1,4 @@
-namespace DJTools.Handlers;
+namespace LibTools4DJs.Handlers;
 
 public interface ILogger
 {

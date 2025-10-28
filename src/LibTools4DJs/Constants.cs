@@ -1,4 +1,4 @@
-﻿namespace DJTools
+﻿namespace LibTools4DJs
 {
     internal static class Constants
     {

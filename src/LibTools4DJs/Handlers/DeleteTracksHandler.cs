@@ -1,6 +1,6 @@
-using DJTools.Rekordbox;
+using LibTools4DJs.Rekordbox;
 
-namespace DJTools.Handlers;
+namespace LibTools4DJs.Handlers;
 
 public sealed class DeleteTracksHandler
 {

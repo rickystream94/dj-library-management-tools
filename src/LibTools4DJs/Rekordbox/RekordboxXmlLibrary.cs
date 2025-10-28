@@ -1,6 +1,6 @@
 using System.Xml;
 
-namespace DJTools.Rekordbox;
+namespace LibTools4DJs.Rekordbox;
 
 public sealed class RekordboxXmlLibrary
 {

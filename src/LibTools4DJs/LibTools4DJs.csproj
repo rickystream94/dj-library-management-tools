@@ -4,19 +4,19 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>DJTools</RootNamespace>
-    <AssemblyName>DJTools</AssemblyName>
+    <RootNamespace>LibTools4DJs</RootNamespace>
+    <AssemblyName>LibTools4DJs</AssemblyName>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Description>CLI utilities to improve integration between Rekordbox and Mixed In Key.</Description>
     <Platforms>x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
-	<PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />  
+	<PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Resources\EnergyLevelToColorCode.json">
+    <Content Include="Configuration\EnergyLevelToColorCode.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Resource>
+    </Content>
   </ItemGroup>
 </Project>

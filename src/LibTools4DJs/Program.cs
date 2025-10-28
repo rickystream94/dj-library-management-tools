@@ -1,11 +1,14 @@
 using System.CommandLine;
-using DJTools.Rekordbox;
-using DJTools.Handlers;
+using LibTools4DJs.Rekordbox;
+using LibTools4DJs.Handlers;
 
-namespace DJTools;
+namespace LibTools4DJs;
 
 internal static class Program
 {
+    private const string DeleteTracksCommand = "delete-tracks";
+    private const string SyncMikToRekordboxCommand = "sync-mik-to-rekordbox";
+
     private static async Task<int> Main(string[] args)
     {
         // Root command description
@@ -29,8 +32,8 @@ internal static class Program
         }) { IsRequired = true };
 
         // delete-tracks command
-        var whatIfOption = new Option<bool>("--what-if", () => false, description: "Simulate deletions without removing any files");
-        var deleteCmd = new Command("delete-tracks", $"Bulk delete tracks marked for deletion, if they're added to the '{Constants.LibraryManagement} > {Constants.DeletePlaylistName}' playlist")
+        var whatIfOption = new Option<bool>("--what-if", () => false, description: "Simulate command without applying changes (no file deletions or XML modifications)");
+        var deleteCmd = new Command(DeleteTracksCommand, $"Bulk delete tracks marked for deletion, if they're added to the '{Constants.LibraryManagement} > {Constants.DeletePlaylistName}' playlist")
         {
             xmlOption,
             whatIfOption
@@ -44,17 +47,18 @@ internal static class Program
         }, xmlOption, whatIfOption);
 
         // sync-mik-to-rekordbox command
-        var syncCmd = new Command("sync-mik-to-rekordbox", "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
+        var syncCmd = new Command(SyncMikToRekordboxCommand, "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
         {
-            xmlOption
+            xmlOption,
+            whatIfOption
         };
-        syncCmd.SetHandler(async (FileInfo xml) =>
+        syncCmd.SetHandler(async (FileInfo xml, bool whatIf) =>
         {
             var console = new ConsoleLogger();
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new SyncMixedInKeyTagsToRekordboxHandler(console);
-            await handler.RunAsync(library);
-        }, xmlOption);
+            await handler.RunAsync(library, whatIf);
+        }, xmlOption, whatIfOption);
 
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);

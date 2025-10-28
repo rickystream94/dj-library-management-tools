@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "DJTools": {
+    "LibTools4DJs": {
       "commandName": "Project",
       "commandLineArgs": "--help"
     }

@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.32417.209
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DJTools", "src\DJTools\DJTools.csproj", "{B4F7D5BD-6A8D-4A74-8E8F-4B8C165D6D4F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibTools4DJs", "src\LibTools4DJs\LibTools4DJs.csproj", "{B4F7D5BD-6A8D-4A74-8E8F-4B8C165D6D4F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
