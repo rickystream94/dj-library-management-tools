@@ -77,16 +77,16 @@ Mixed In Key's energy level (1–10) is mapped to Rekordbox track colour using a
 
 | Energy | Hex Code | Rekordbox Colour |
 |--------|----------|---------------|
-| 1 | 0x0000FF | Blue |
-| 2 | 0x0000FF | Blue |
-| 3 | 0x0000FF | Blue |
-| 4 | 0x0000FF | Blue |
-| 5 | 0x00FF00 | Green |
-| 6 | 0xFFFF00 | Yellow |
-| 7 | 0xFFA500 | Orange |
-| 8 | 0xFF0000 | Red |
-| 9 | 0xFF0000 | Red |
-| 10 | 0xFF0000 | Red |
+| 1 | 0x0000FF | Blue ![#blue](https://placehold.co/15x15/blue/blue.png) |
+| 2 | 0x0000FF | Blue ![#blue](https://placehold.co/15x15/blue/blue.png) |
+| 3 | 0x0000FF | Blue ![#blue](https://placehold.co/15x15/blue/blue.png) |
+| 4 | 0x0000FF | Blue ![#blue](https://placehold.co/15x15/blue/blue.png) |
+| 5 | 0x00FF00 | Green ![#green](https://placehold.co/15x15/green/green.png) |
+| 6 | 0xFFFF00 | Yellow ![#yellow](https://placehold.co/15x15/yellow/yellow.png) |
+| 7 | 0xFFA500 | Orange ![#orange](https://placehold.co/15x15/orange/orange.png) |
+| 8 | 0xFF0000 | Red ![#red](https://placehold.co/15x15/red/red.png) |
+| 9 | 0xFF0000 | Red ![#red](https://placehold.co/15x15/red/red.png) |
+| 10 | 0xFF0000 | Red ![#red](https://placehold.co/15x15/red/red.png)|
 
 Only a limited palette renders distinctly in Rekordbox; adjust responsibly.
 
