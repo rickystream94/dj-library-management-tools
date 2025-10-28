@@ -13,6 +13,12 @@ More commands can be added over time; follow the same pattern. Always back up yo
 
 ---
 
+## Build status
+
+[![.NET](https://github.com/rickystream94/dj-library-management-tools/actions/workflows/dotnet.yml/badge.svg)](https://github.com/rickystream94/dj-library-management-tools/actions/workflows/dotnet.yml)
+
+---
+
 ## Prerequisites
 - .NET 8 SDK
 - Rekordbox v7.x
