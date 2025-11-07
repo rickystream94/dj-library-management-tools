@@ -5,7 +5,7 @@ Purpose: Provide CLI & PowerShell utilities to patch gaps between Rekordbox and 
 ### Architecture Snapshot
 Code lives under `src/LibTools4DJs/` (C# .NET 8 console app). Two primary commands exposed via `System.CommandLine` in `Program.cs`:
 1. `delete-tracks` → invokes `DeleteTracksHandler`.
-2. `sync-mik-to-rekordbox` → invokes `SyncMixedInKeyTagsToRekordboxHandler`.
+2. `sync-mik-tags-to-rekordbox` → invokes `SyncMixedInKeyTagsToRekordboxHandler`.
 
 Core model for library: `RekordboxXmlLibrary` (wrapper over `XmlDocument`)
 - Loads exported Rekordbox XML (`RekordboxXmlLibrary.Load(path)`).
@@ -40,7 +40,7 @@ Prereqs: .NET 8 SDK. (PowerShell scripts remain separate in `scripts/`.)
 Build: `dotnet build LibTools4DJs.sln`.
 Run examples (from repo root):
 - Delete: `dotnet run --project src/LibTools4DJs -- delete-tracks --xml D:\RekordboxExports\rekordbox.xml --what-if`
-- Sync: `dotnet run --project src/LibTools4DJs -- sync-mik-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml`
+- Sync: `dotnet run --project src/LibTools4DJs -- sync-mik-tags-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml`
 Binary output: `src/LibTools4DJs/bin/{Debug|Release}/net8.0/` (mapping JSON resolves from `AppContext.BaseDirectory` under `Configuration` folder). Ensure `Configuration/EnergyLevelToColorCode.json` is copied to output (Content item with `CopyToOutputDirectory`).
 
 ### Extension & Modification Guidelines

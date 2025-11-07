@@ -7,8 +7,8 @@ Console utilities to help DJs with advanced library management tasks involving [
 | Feature | Command |
 |---------|---------|
 | Bulk delete tracks (from Rekordbox collection and from disk) | `delete-tracks` |
-| Sync MIK key for M4A tracks to Rekordbox XML | `sync-mik-to-rekordbox` |
-| Map MIK energy level to colour code in Rekordbox XML | `sync-mik-to-rekordbox` |
+| Sync MIK key for M4A tracks to Rekordbox XML | `sync-mik-tags-to-rekordbox` |
+| Map MIK energy level to colour code in Rekordbox XML | `sync-mik-tags-to-rekordbox` |
 | Import Rekordbox library structure (folders and playlists) in MIK | **Coming soon** |
 | Import MIK library structure (folders and playlists) in Rekordbox | **Coming soon** |
 
@@ -53,7 +53,7 @@ LibTools4DJs.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" [--what
 
 ### Sync MIK Key & Energy
 ```powershell
-LibTools4DJs.exe sync-mik-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
+LibTools4DJs.exe sync-mik-tags-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
 ```
 
 ### After execution: re-import updated Rekordbox collection XML

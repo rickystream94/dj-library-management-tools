@@ -7,7 +7,8 @@ namespace LibTools4DJs;
 internal static class Program
 {
     private const string DeleteTracksCommand = "delete-tracks";
-    private const string SyncMikToRekordboxCommand = "sync-mik-to-rekordbox";
+    private const string SyncMikToRekordboxCommand = "sync-mik-tags-to-rekordbox";
+    private const string SyncRekordboxPlaylistsToMikCommand = "sync-rekordbox-playlists-to-mik";
 
     private static async Task<int> Main(string[] args)
     {
@@ -46,7 +47,7 @@ internal static class Program
             await handler.RunAsync(library, whatIf);
         }, xmlOption, whatIfOption);
 
-        // sync-mik-to-rekordbox command
+        // sync-mik-tags-to-rekordbox command
         var syncCmd = new Command(SyncMikToRekordboxCommand, "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
         {
             xmlOption,
@@ -60,8 +61,40 @@ internal static class Program
             await handler.RunAsync(library, whatIf);
         }, xmlOption, whatIfOption);
 
+        // sync-rekordbox-playlists-to-mik command
+        var mikDbOption = new Option<FileInfo>(name: "--mik-db", description: "Path to Mixed In Key SQLite database (MIKStore.db)", parseArgument: result =>
+        {
+            var token = result.Tokens.SingleOrDefault()?.Value;
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                result.ErrorMessage = "--mik-db is required";
+                return null!;
+            }
+            var fi = new FileInfo(token);
+            if (!fi.Exists)
+            {
+                result.ErrorMessage = $"MIK database file not found: {fi.FullName}";
+            }
+            return fi;
+        }) { IsRequired = true };
+
+        var syncPlaylistsCmd = new Command(SyncRekordboxPlaylistsToMikCommand, "Replicate Rekordbox playlist/folder hierarchy into Mixed In Key database (no deletion of existing).")
+        {
+            xmlOption,
+            mikDbOption,
+            whatIfOption
+        };
+        syncPlaylistsCmd.SetHandler(async (FileInfo xml, FileInfo mikDb, bool whatIf) =>
+        {
+            var console = new ConsoleLogger();
+            var library = RekordboxXmlLibrary.Load(xml.FullName);
+            var handler = new SyncRekordboxPlaylistsToMikHandler(console);
+            await handler.RunAsync(library, mikDb.FullName, whatIf);
+        }, xmlOption, mikDbOption, whatIfOption);
+
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);
+        root.AddCommand(syncPlaylistsCmd);
 
         return await root.InvokeAsync(args);
     }
