@@ -18,6 +18,8 @@
         internal const string KeyTypeAttributeName = "KeyType";
         internal const string ColourAttributeName = "Colour";
         internal const string LocalFileUriPrefix = "file://localhost/";
+        internal const string CUEAnalysisPlaylistName = "CUE Analysis Playlist";
+        internal const string RootPlaylistName = "ROOT";
         #endregion
 
         #region Mixed In Key
