@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using TagLibFile = TagLib.File;
 using File = System.IO.File;
+using LibTools4DJs.Logging;
 
 namespace LibTools4DJs.Handlers;
 
@@ -17,7 +18,7 @@ public sealed class SyncMixedInKeyTagsToRekordboxHandler
 
     public Task RunAsync(RekordboxXmlLibrary library, bool whatIf)
     {
-        var energyLevelToColourCode = LoadEnergyLevelToColourMapping();
+        var energyLevelToColourCode = GetEnergyLevelToColourMapping();
         var allTracks = library.GetCollectionTracks().ToList();
         _ = library.GetLibraryManagementFolder() ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found.");
 
@@ -147,7 +148,7 @@ public sealed class SyncMixedInKeyTagsToRekordboxHandler
         return Task.CompletedTask;
     }
 
-    private static Dictionary<int,string> LoadEnergyLevelToColourMapping()
+    private static Dictionary<int,string> GetEnergyLevelToColourMapping()
     {
         string configurationPath = Path.Combine(AppContext.BaseDirectory, "Configuration", Constants.EnergyLevelToColourCodeMappingFileName);
 

@@ -9,7 +9,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 | Bulk delete tracks (from Rekordbox collection and from disk) | `delete-tracks` |
 | Sync MIK key for M4A tracks to Rekordbox XML | `sync-mik-tags-to-rekordbox` |
 | Map MIK energy level to colour code in Rekordbox XML | `sync-mik-tags-to-rekordbox` |
-| Import Rekordbox library structure (folders and playlists) in MIK | **Coming soon** |
+| Import Rekordbox library structure (folders and playlists) in MIK | `sync-rekordbox-playlists-to-mik` |
 | Import MIK library structure (folders and playlists) in Rekordbox | **Coming soon** |
 
 ## Notes
@@ -27,7 +27,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 ---
 
 ## Prerequisites
-- .NET 8 SDK
+- .NET 10 SDK
 - Rekordbox v7.x with your music collection.
 - Mixed In Key, setup to write key & energy level _before_ the Comment tag (e.g. `1A - Energy 6 ...`), and with your music library already analyzed.
 
@@ -45,6 +45,11 @@ Console utilities to help DJs with advanced library management tasks involving [
 1. Build: `dotnet build .\LibTools4DJs.sln -c Release`.
 1. Find the generated `LibToolsForDJs.exe` under the `bin` folder.
 
+### After execution of commands that generate a new rekordbox XML file
+1. Import the generated `rekordbox_collection_YYYY-MM-DD_HH-mm.xml` into Rekordbox.
+1. In the rekordbox.xml pane, you will notice the `MIK Key Analysis` & `MIK Energy Level Analysis` playlists.
+1. Select all tracks in each playlist, right‑click → "Import to collection". Now those tracks will show the correct key from the MIK analysis (only relevant to M4A tracks) and will have a colour based on the energy level as detected by MIK.
+
 ### Delete Tracks
 
 ```powershell
@@ -52,14 +57,23 @@ LibTools4DJs.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" [--what
 ```
 
 ### Sync MIK Key & Energy
+
 ```powershell
 LibTools4DJs.exe sync-mik-tags-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
 ```
 
-### After execution: re-import updated Rekordbox collection XML
-1. Import the generated `rekordbox_collection_YYYY-MM-DD_HH-mm.xml` into Rekordbox.
-1. In the rekordbox.xml pane, you will notice the `MIK Key Analysis` & `MIK Energy Level Analysis` playlists.
-1. Select all tracks in each playlist, right‑click → "Import to collection". Now those tracks will show the correct key from the MIK analysis (only relevant to M4A tracks) and will have a colour based on the energy level as detected by MIK.
+### Sync Rekordbox Playlists To Mixed In Key
+Replicates the Rekordbox playlist & folder hierarchy into the Mixed In Key database (`MIKStore.db`). Existing playlists/folders in MIK are never deleted (safe additive sync). Track memberships are inserted only if not already present (idempotent behavior).
+
+Requires the path to your MIK SQLite database file via `--mik-db`.
+
+Typical MIK database location (adjust version / user profile as needed):
+`C:\Users\<YOU>\AppData\Local\Mixed In Key\Mixed In Key\11.0\MIKStore.db`
+
+Usage:
+```powershell
+LibTools4DJs.exe sync-rekordbox-playlists-to-mik --xml "D:\RekordboxExports\rekordbox.xml" --mik-db "C:\Users\<YOU>\AppData\Local\Mixed In Key\Mixed In Key\11.0\MIKStore.db" [--what-if]
+```
 
 ---
 

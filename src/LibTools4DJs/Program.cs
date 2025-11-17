@@ -1,6 +1,7 @@
 using System.CommandLine;
 using LibTools4DJs.Rekordbox;
 using LibTools4DJs.Handlers;
+using LibTools4DJs.Logging;
 
 namespace LibTools4DJs;
 
@@ -42,6 +43,11 @@ internal static class Program
         deleteCmd.SetHandler(async (FileInfo xml, bool whatIf) =>
         {
             var console = new ConsoleLogger();
+            console.PrintCommandInvocation(DeleteTracksCommand,
+                [
+                    (xmlOption.Name, xml.FullName),
+                    (whatIfOption.Name, whatIf)
+                ]);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new DeleteTracksHandler(console);
             await handler.RunAsync(library, whatIf);
@@ -56,6 +62,11 @@ internal static class Program
         syncCmd.SetHandler(async (FileInfo xml, bool whatIf) =>
         {
             var console = new ConsoleLogger();
+            console.PrintCommandInvocation(SyncMikToRekordboxCommand,
+                [
+                    (xmlOption.Name, xml.FullName),
+                    (whatIfOption.Name, whatIf)
+                ]);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new SyncMixedInKeyTagsToRekordboxHandler(console);
             await handler.RunAsync(library, whatIf);
@@ -87,6 +98,12 @@ internal static class Program
         syncPlaylistsCmd.SetHandler(async (FileInfo xml, FileInfo mikDb, bool whatIf) =>
         {
             var console = new ConsoleLogger();
+            console.PrintCommandInvocation(SyncRekordboxPlaylistsToMikCommand,
+                [
+                    (xmlOption.Name, xml.FullName),
+                    (mikDbOption.Name, mikDb.FullName),
+                    (whatIfOption.Name, whatIf)
+                ]);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new SyncRekordboxPlaylistsToMikHandler(console);
             await handler.RunAsync(library, mikDb.FullName, whatIf);

@@ -1,8 +1,16 @@
 {
   "profiles": {
-    "LibTools4DJs": {
+    "CLI Help": {
       "commandName": "Project",
       "commandLineArgs": "--help"
+    },
+    "sync-rekordbox-playlists-to-mik (WhatIf)": {
+      "commandName": "Project",
+      "commandLineArgs": "sync-rekordbox-playlists-to-mik --xml $rekordboxXml --mik-db $mikDb --what-if"
+    },
+    "sync-rekordbox-playlists-to-mik": {
+      "commandName": "Project",
+      "commandLineArgs": "sync-rekordbox-playlists-to-mik --xml $rekordboxXml --mik-db $mikDb"
     }
   }
 }

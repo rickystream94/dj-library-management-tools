@@ -1,3 +1,4 @@
+using LibTools4DJs.Logging;
 using LibTools4DJs.Rekordbox;
 
 namespace LibTools4DJs.Handlers;
