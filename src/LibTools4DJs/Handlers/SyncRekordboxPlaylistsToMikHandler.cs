@@ -75,15 +75,15 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         return set;
     }
 
-    private static async Task<Dictionary<string, Guid>> GetSongFilePathToIdMapAsync(SqliteConnection connection)
+    private static async Task<Dictionary<string, string>> GetSongFilePathToIdMapAsync(SqliteConnection connection)
     {
-        var dict = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT Id, File FROM Song";
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            var id = reader.GetGuid(0);
+            var id = reader.GetString(0);
             var file = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
             var norm = NormalizePath(file);
             if (!string.IsNullOrWhiteSpace(norm) && !dict.ContainsKey(norm))
@@ -119,13 +119,13 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         return total;
     }
 
-    private Guid GetOrCreateCollectionId(string name, Guid? parentId, bool isFolder, bool whatIf, SqliteConnection connection, SqliteTransaction? tx, HashSet<string> existingCollections, SyncStats stats)
+    private string GetOrCreateCollectionId(string name, string? parentId, bool isFolder, bool whatIf, SqliteConnection connection, SqliteTransaction? tx, HashSet<string> existingCollections, SyncStats stats)
     {
-        Guid collectionId;
+        string? collectionId;
         if (!existingCollections.Contains(name))
         {
             // Playlist/folder does not exist; create it
-            collectionId = Guid.NewGuid();
+            collectionId = Guid.NewGuid().ToString();
             if (whatIf)
             {
                 this._log.Info($"[WhatIf] Would create {(isFolder ? "folder" : "playlist")} '{name}' (Id={collectionId}) parent={parentId}");
@@ -157,20 +157,18 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         using var findCmd = connection.CreateCommand();
         findCmd.CommandText = "SELECT Id FROM Collection WHERE Name = $name LIMIT 1";
         findCmd.Parameters.AddWithValue("$name", name);
-        string? idStr = (string?)findCmd.ExecuteScalar();
-        if (!string.IsNullOrWhiteSpace(idStr) && Guid.TryParse(idStr, out Guid parsedCollectionId))
-            return parsedCollectionId;
-
-        throw new InvalidOperationException($"Expected ID as GUID for existing collection named '{name}', instead got: {idStr}");
+        collectionId = (string?)findCmd.ExecuteScalar();
+        
+        return collectionId ?? throw new InvalidOperationException($"Detected null collection ID for existing collection named '{name}'");
     }
 
     private void TraverseNode(
         XmlNode node,
-        Guid? parentId,
+        string? parentId,
         SqliteConnection connection,
         RekordboxXmlLibrary library,
         HashSet<string> existingCollections,
-        Dictionary<string, Guid> songPathToId,
+        Dictionary<string, string> songPathToId,
         bool whatIf,
         SqliteTransaction? tx,
         SyncStats stats,
@@ -204,7 +202,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
                 continue;
             }
 
-            Guid collectionId = this.GetOrCreateCollectionId(name, parentId, isFolder, whatIf, connection, tx, existingCollections, stats);
+            string collectionId = this.GetOrCreateCollectionId(name, parentId, isFolder, whatIf, connection, tx, existingCollections, stats);
             if (isPlaylist)
             {
                 this.ProcessPlaylist(el, collectionId, name, connection, library, songPathToId, whatIf, tx, stats, progress);
@@ -219,11 +217,11 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
 
     private void ProcessPlaylist(
         XmlElement el,
-        Guid collectionId,
+        string collectionId,
         string name,
         SqliteConnection connection,
         RekordboxXmlLibrary library,
-        Dictionary<string, Guid> songPathToId,
+        Dictionary<string, string> songPathToId,
         bool whatIf,
         SqliteTransaction? tx,
         SyncStats stats,
@@ -231,16 +229,16 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
     {
         // Update progress bar context with current playlist name
         progress.CurrentItemName = name;
-        var existingMembershipSongIds = new HashSet<Guid>();
+        var existingMembershipSongIds = new HashSet<string>();
         int maxExistingSequence = -1;
         using (var existingCmd = connection.CreateCommand())
         {
             existingCmd.CommandText = "SELECT SongId, Sequence FROM SongCollectionMembership WHERE CollectionId = $cid";
-            existingCmd.Parameters.AddWithValue("$cid", collectionId.ToString());
+            existingCmd.Parameters.AddWithValue("$cid", collectionId);
             using var r = existingCmd.ExecuteReader();
             while (r.Read())
             {
-                var sid = r.GetGuid(0);
+                var sid = r.GetString(0);
                 existingMembershipSongIds.Add(sid);
                 if (!r.IsDBNull(1))
                 {
@@ -288,7 +286,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
                 insertMem.Transaction = tx;
                 insertMem.CommandText = @"INSERT INTO SongCollectionMembership (Id, SongId, CollectionId, Sequence)
                                                    VALUES ($id, $songId, $collectionId, $seq)";
-                insertMem.Parameters.AddWithValue("$id", Guid.NewGuid());
+                insertMem.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
                 insertMem.Parameters.AddWithValue("$songId", songId);
                 insertMem.Parameters.AddWithValue("$collectionId", collectionId);
                 insertMem.Parameters.AddWithValue("$seq", sequence);
