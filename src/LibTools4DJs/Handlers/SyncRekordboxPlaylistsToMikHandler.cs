@@ -196,9 +196,11 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
                 continue;
             }
 
-            if (isPlaylist && name.Equals(Constants.CUEAnalysisPlaylistName, StringComparison.OrdinalIgnoreCase))
+            if (isPlaylist &&
+                (name.Equals(Constants.CUEAnalysisPlaylistName, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(Constants.MikCuePointsPlaylistName, StringComparison.OrdinalIgnoreCase)))
             {
-                this._log.Warn($"Skipping '{Constants.CUEAnalysisPlaylistName}'.");
+                this._log.Warn($"Skipping '{name}'.");
                 continue;
             }
 

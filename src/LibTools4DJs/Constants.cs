@@ -20,6 +20,7 @@
         internal const string LocalFileUriPrefix = "file://localhost/";
         internal const string CUEAnalysisPlaylistName = "CUE Analysis Playlist";
         internal const string RootPlaylistName = "ROOT";
+        internal const string MikCuePointsPlaylistName = "MIK Cue Points";
         #endregion
 
         #region Mixed In Key
