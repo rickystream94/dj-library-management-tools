@@ -19,15 +19,33 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         if (!File.Exists(mikDbPath))
             throw new FileNotFoundException("MIK database not found", mikDbPath);
 
+        // Backup existing DB when applying changes
+        if (!whatIf)
+        {
+            try
+            {
+                var dbDir = Path.GetDirectoryName(mikDbPath)!;
+                var backupDir = Path.Combine(dbDir, "LibTools4DJs_Backups");
+                Directory.CreateDirectory(backupDir);
+
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var backupFile = Path.Combine(backupDir, $"{Path.GetFileNameWithoutExtension(mikDbPath)}_{timestamp}.db");
+                File.Copy(mikDbPath, backupFile, overwrite: false);
+                this._log.Info($"Backup created: {backupFile}");
+            }
+            catch (Exception ex)
+            {
+                // Fail-safe: surface clear error; avoid proceeding without backup
+                throw new IOException($"Failed to create backup of MIK database '{mikDbPath}'. Aborting to avoid data loss. Details: {ex.Message}", ex);
+            }
+        }
+
         var playlistsRoot = library.GetPlaylistsRoot() ?? throw new InvalidOperationException("Root playlist node not found in Rekordbox XML.");
 
         if (whatIf)
             this._log.Info("[WhatIf] Simulating playlist sync. No database changes will be committed.");
 
-        using var connection = new SqliteConnection($"Data Source={mikDbPath}");
-        await connection.OpenAsync();
-
-        MikDao mikDao = new(connection);
+        MikDao mikDao = new(mikDbPath);
 
         var totalTracks = CountTotalPlaylistTracks(playlistsRoot);
         var progress = new ProgressBar(totalTracks, whatIf ? "Simulating" : "Syncing");
@@ -36,7 +54,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         this._log = new ConsoleLogger(progress);
 
         var stats = new SyncStats();
-        using var tx = whatIf ? null : connection.BeginTransaction();
+        using var tx = whatIf ? null : await mikDao.BeginTransactionAsync();
         await this.TraverseNodeAsync(playlistsRoot, null, mikDao, library, stats, progress, tx, whatIf);
 
         if (!whatIf)

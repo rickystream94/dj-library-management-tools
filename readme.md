@@ -65,14 +65,15 @@ LibTools4DJs.exe sync-mik-tags-to-rekordbox --xml "D:\RekordboxExports\rekordbox
 ### Sync Rekordbox Playlists To Mixed In Key
 Replicates the Rekordbox playlist & folder hierarchy into the Mixed In Key database (`MIKStore.db`). Existing playlists/folders in MIK are never deleted (safe additive sync). Track memberships are inserted only if not already present (idempotent behavior).
 
-Requires the path to your MIK SQLite database file via `--mik-db`.
+The tool searches for the MIK database in the default location location:
+`$env:USERPROFILE\AppData\Local\Mixed In Key\Mixed In Key\<version>\MIKStore.db`.
+You can optionally provide a different path with the `--mik-db` parameter, but I suggest to do so only if you know what you're doing. Otherwise, you can skip this parameter.
 
-Typical MIK database location (adjust version / user profile as needed):
-`C:\Users\<YOU>\AppData\Local\Mixed In Key\Mixed In Key\11.0\MIKStore.db`
+The default version is **11.0**, but it can be overridden with the `--mik-version` parameter.
 
 Usage:
 ```powershell
-LibTools4DJs.exe sync-rekordbox-playlists-to-mik --xml "D:\RekordboxExports\rekordbox.xml" --mik-db "C:\Users\<YOU>\AppData\Local\Mixed In Key\Mixed In Key\11.0\MIKStore.db" [--what-if]
+LibTools4DJs.exe sync-rekordbox-playlists-to-mik --xml "D:\RekordboxExports\rekordbox.xml" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"]
 ```
 
 ---

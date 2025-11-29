@@ -73,41 +73,86 @@ internal static class Program
         }, xmlOption, whatIfOption);
 
         // sync-rekordbox-playlists-to-mik command
-        var mikDbOption = new Option<FileInfo>(name: "--mik-db", description: "Path to Mixed In Key SQLite database (MIKStore.db)", parseArgument: result =>
-        {
-            var token = result.Tokens.SingleOrDefault()?.Value;
-            if (string.IsNullOrWhiteSpace(token))
+        var mikVersionOption = new Option<string>(
+            name: "--mik-version",
+            getDefaultValue: () => "11.0",
+            description: "Mixed In Key version (e.g., 11.0). Defaults to 11.0.");
+
+        // --mik-db becomes optional; if omitted, we auto-resolve from USERPROFILE + version
+        var mikDbOption = new Option<FileInfo?>(
+            name: "--mik-db",
+            description: "Path to Mixed In Key SQLite database (MIKStore.db). Optional; if omitted, the path will be auto-resolved from USERPROFILE and --mik-version.",
+            parseArgument: result =>
             {
-                result.ErrorMessage = "--mik-db is required";
-                return null!;
-            }
-            var fi = new FileInfo(token);
-            if (!fi.Exists)
-            {
-                result.ErrorMessage = $"MIK database file not found: {fi.FullName}";
-            }
-            return fi;
-        }) { IsRequired = true };
+                var token = result.Tokens.SingleOrDefault()?.Value;
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    // Optional; return null to trigger auto-resolution later
+                    return null;
+                }
+                var fi = new FileInfo(token);
+                if (!fi.Exists)
+                {
+                    result.ErrorMessage = $"MIK database file not found: {fi.FullName}";
+                }
+                return fi;
+            })
+        { IsRequired = false };
 
         var syncPlaylistsCmd = new Command(SyncRekordboxPlaylistsToMikCommand, "Replicate Rekordbox playlist/folder hierarchy into Mixed In Key database (no deletion of existing).")
         {
             xmlOption,
             mikDbOption,
+            mikVersionOption,
             whatIfOption
         };
-        syncPlaylistsCmd.SetHandler(async (FileInfo xml, FileInfo mikDb, bool whatIf) =>
+        syncPlaylistsCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, bool whatIf) =>
         {
             var console = new ConsoleLogger();
+
+            // Resolve MIK DB path if not provided
+            string resolvedMikDbPath;
+            if (mikDb is not null)
+            {
+                resolvedMikDbPath = mikDb.FullName;
+            }
+            else
+            {
+                var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+                if (string.IsNullOrWhiteSpace(userProfile))
+                {
+                    console.Error("USERPROFILE environment variable is not set. Cannot auto-resolve MIK database path.");
+                    return;
+                }
+                // C:\Users\<user>\AppData\Local\Mixed In Key\Mixed In Key\<version>\MIKStore.db
+                resolvedMikDbPath = Path.Combine(
+                    userProfile,
+                    "AppData",
+                    "Local",
+                    "Mixed In Key",
+                    "Mixed In Key",
+                    mikVersion,
+                    "MIKStore.db");
+
+                if (!File.Exists(resolvedMikDbPath))
+                {
+                    console.Error($"Auto-resolved MIK database file not found: {resolvedMikDbPath}. Provide --mik-db explicitly or adjust --mik-version.");
+                    return;
+                }
+            }
+
             console.PrintCommandInvocation(SyncRekordboxPlaylistsToMikCommand,
                 [
                     (xmlOption.Name, xml.FullName),
-                    (mikDbOption.Name, mikDb.FullName),
+                    (mikDbOption.Name, resolvedMikDbPath),
+                    (mikVersionOption.Name, mikVersion),
                     (whatIfOption.Name, whatIf)
                 ]);
+
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new SyncRekordboxPlaylistsToMikHandler(console);
-            await handler.RunAsync(library, mikDb.FullName, whatIf);
-        }, xmlOption, mikDbOption, whatIfOption);
+            await handler.RunAsync(library, resolvedMikDbPath, whatIf);
+        }, xmlOption, mikDbOption, mikVersionOption, whatIfOption);
 
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);
