@@ -1,5 +1,8 @@
 using LibTools4DJs.Logging;
+using LibTools4DJs.MixedInKey;
+using LibTools4DJs.MixedInKey.Models;
 using LibTools4DJs.Rekordbox;
+using LibTools4DJs.Utils;
 using Microsoft.Data.Sqlite;
 using System.Xml;
 
@@ -8,7 +11,7 @@ namespace LibTools4DJs.Handlers;
 public sealed class SyncRekordboxPlaylistsToMikHandler
 {
     private ILogger _log;
-    
+
     public SyncRekordboxPlaylistsToMikHandler(ILogger log) => this._log = log;
 
     public async Task RunAsync(RekordboxXmlLibrary library, string mikDbPath, bool whatIf)
@@ -16,80 +19,37 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         if (!File.Exists(mikDbPath))
             throw new FileNotFoundException("MIK database not found", mikDbPath);
 
-        var playlistsRoot = library.Document.SelectSingleNode($"/DJ_PLAYLISTS/PLAYLISTS/NODE[@Type='0' and @Name='{Constants.RootPlaylistName}']")
-                ?? throw new InvalidOperationException("Root playlist node not found in Rekordbox XML.");
+        var playlistsRoot = library.GetPlaylistsRoot() ?? throw new InvalidOperationException("Root playlist node not found in Rekordbox XML.");
+
         if (whatIf)
             this._log.Info("[WhatIf] Simulating playlist sync. No database changes will be committed.");
 
         using var connection = new SqliteConnection($"Data Source={mikDbPath}");
         await connection.OpenAsync();
 
-        var existingCollections = await GetExistingMIKPlaylistsAsync(connection);
-        var songPathToId = await GetSongFilePathToIdMapAsync(connection);
+        MikDao mikDao = new(connection);
+
         var totalTracks = CountTotalPlaylistTracks(playlistsRoot);
         var progress = new ProgressBar(totalTracks, whatIf ? "Simulating" : "Syncing");
 
         // Override logger to be progress-aware
         this._log = new ConsoleLogger(progress);
+
         var stats = new SyncStats();
         using var tx = whatIf ? null : connection.BeginTransaction();
-        this.TraverseNode(playlistsRoot, null, connection, library, existingCollections, songPathToId, whatIf, tx, stats, progress);
+        await this.TraverseNodeAsync(playlistsRoot, null, mikDao, library, stats, progress, tx, whatIf);
 
         if (!whatIf)
             tx!.Commit();
 
-        this._log.Info($"Playlist sync complete.\nNew MIK playlists: {stats.NewCollections}\nExisting MIK playlists/folders skipped: {stats.ExistingCollectionsSkipped}\nMemberships inserted: {stats.MembershipsInserted}\nSongs not found in MIK: {stats.TracksMissingInMik.Count}", ConsoleColor.Green);
+        this._log.Info($"Playlist sync complete.\n" +
+            $"New MIK playlists: {stats.NewCollections}\n" +
+            $"Existing MIK playlists/folders skipped: {stats.ExistingCollectionsSkipped}\n" +
+            $"Memberships inserted: {stats.MembershipsInserted}\n" +
+            $"Songs not found in MIK: {stats.TracksMissingInMik.Count}", ConsoleColor.Green);
 
-        if (whatIf) this._log.Info("[WhatIf] No changes persisted.");
-    }
-
-    private static string NormalizePath(string p)
-    {
-        if (string.IsNullOrWhiteSpace(p)) return string.Empty;
-        // Mixed In Key stores Windows paths with backslashes; Rekordbox decode may yield forward slashes.
-        p = p.Trim();
-        p = p.Replace('/', '\\');
-        try
-        {
-            // Path.GetFullPath will also canonicalize casing where possible
-            p = Path.GetFullPath(p);
-        }
-        catch
-        {
-            // If invalid path characters, keep as-is after slash normalization.
-        }
-        return p;
-    }
-
-    private static async Task<HashSet<string>> GetExistingMIKPlaylistsAsync(SqliteConnection connection)
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT Name FROM Collection";
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            var name = reader.GetString(0);
-            set.Add(name);
-        }
-        return set;
-    }
-
-    private static async Task<Dictionary<string, string>> GetSongFilePathToIdMapAsync(SqliteConnection connection)
-    {
-        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT Id, File FROM Song";
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            var id = reader.GetString(0);
-            var file = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-            var norm = NormalizePath(file);
-            if (!string.IsNullOrWhiteSpace(norm) && !dict.ContainsKey(norm))
-                dict[norm] = id;
-        }
-        return dict;
+        if (whatIf)
+            this._log.Info("[WhatIf] No changes persisted.");
     }
 
     private static int CountTotalPlaylistTracks(XmlNode root)
@@ -99,94 +59,101 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         {
             foreach (XmlNode child in node.ChildNodes)
             {
-                if (child is not XmlElement el) continue;
+                if (child is not XmlElement el)
+                    continue;
+
                 var type = el.GetAttribute(Constants.TypeAttributeName);
                 var name = el.GetAttribute(Constants.NameAttributeName);
-                if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(name)) continue;
+
+                if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(name))
+                    continue;
                 bool isFolder = type == "0";
                 bool isPlaylist = type == "1";
-                if (isFolder && name.Equals(Constants.LibraryManagement, StringComparison.OrdinalIgnoreCase)) continue;
-                if (isPlaylist && name.Equals(Constants.CUEAnalysisPlaylistName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (isFolder && name.Equals(Constants.LibraryManagement, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (isPlaylist && name.Equals(Constants.CUEAnalysisPlaylistName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 if (isPlaylist)
                 {
                     var tracks = el.SelectNodes("TRACK");
-                    if (tracks != null) total += tracks.Count;
+                    if (tracks != null)
+                        total += tracks.Count;
                 }
-                if (isFolder) Walk(el);
+
+                if (isFolder)
+                    Walk(el);
             }
         }
+
         Walk(root);
         return total;
     }
 
-    private string GetOrCreateCollectionId(string name, string? parentId, bool isFolder, bool whatIf, SqliteConnection connection, SqliteTransaction? tx, HashSet<string> existingCollections, SyncStats stats)
+    private async Task<(MikCollection collection, string id)> GetOrCreateCollectionAsync(
+        string name,
+        string? parentId,
+        bool isFolder,
+        MikDao mikDao,
+        SyncStats stats,
+        SqliteTransaction? tx = null,
+        bool whatIf = false)
     {
-        string? collectionId;
-        if (!existingCollections.Contains(name))
+        var existingCollections = await mikDao.ExistingCollections;
+        MikCollection collection = new(parentId, name, isFolder);
+        if (!existingCollections.TryGetValue(collection, out string? collectionId))
         {
             // Playlist/folder does not exist; create it
             collectionId = Guid.NewGuid().ToString();
             if (whatIf)
             {
-                this._log.Info($"[WhatIf] Would create {(isFolder ? "folder" : "playlist")} '{name}' (Id={collectionId}) parent={parentId}");
+                this._log.Info($"[WhatIf] Would create {(collection.IsFolder ? "folder" : "playlist")} '{collection.Name}' (Id={collectionId}, Parent={collection.ParentId})");
             }
             else
             {
-                using var insertCmd = connection.CreateCommand();
-                insertCmd.Transaction = tx;
-                insertCmd.CommandText = @"INSERT INTO Collection (Id, ExternalId, Name, Emoji, Sequence, LibraryTypeId, IsLibrary, IsFolder, ParentFolderId)
-                                          VALUES ($id, NULL, $name, NULL, 0, 1, 0, $isFolder, $parentId)";
-                insertCmd.Parameters.AddWithValue("$id", collectionId);
-                insertCmd.Parameters.AddWithValue("$name", name);
-                insertCmd.Parameters.AddWithValue("$isFolder", isFolder ? 1 : 0);
-                if (parentId == null)
-                    insertCmd.Parameters.AddWithValue("$parentId", DBNull.Value);
-                else
-                    insertCmd.Parameters.AddWithValue("$parentId", parentId);
-                insertCmd.ExecuteNonQuery();
-                existingCollections.Add(name);
+                await mikDao.CreateNewCollectionAsync(collection, collectionId, tx);
+                existingCollections.Add(collection, collectionId);
                 stats.NewCollections++;
-                this._log.Info($"Created {(isFolder ? "folder" : "playlist")} '{name}' (Id={collectionId}) parent={parentId}");
+                this._log.Info($"Created {(isFolder ? "folder" : "playlist")} '{name}' (Id={collectionId}, Parent={parentId})");
             }
-
-            return collectionId;
+        }
+        else
+        {
+            stats.ExistingCollectionsSkipped++;
         }
 
-        stats.ExistingCollectionsSkipped++;
-
-        using var findCmd = connection.CreateCommand();
-        findCmd.CommandText = "SELECT Id FROM Collection WHERE Name = $name LIMIT 1";
-        findCmd.Parameters.AddWithValue("$name", name);
-        collectionId = (string?)findCmd.ExecuteScalar();
-        
-        return collectionId ?? throw new InvalidOperationException($"Detected null collection ID for existing collection named '{name}'");
+        return (collection, collectionId);
     }
 
-    private void TraverseNode(
+    private async Task TraverseNodeAsync(
         XmlNode node,
         string? parentId,
-        SqliteConnection connection,
+        MikDao mikDao,
         RekordboxXmlLibrary library,
-        HashSet<string> existingCollections,
-        Dictionary<string, string> songPathToId,
-        bool whatIf,
-        SqliteTransaction? tx,
         SyncStats stats,
-        ProgressBar progress)
+        ProgressBar progress,
+        SqliteTransaction? tx = null,
+        bool whatIf = false)
     {
         foreach (XmlNode child in node.ChildNodes)
         {
             if (child is not XmlElement el)
                 continue;
+
             var type = el.GetAttribute(Constants.TypeAttributeName);
             var name = el.GetAttribute(Constants.NameAttributeName);
-            if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(name)) continue;
+
+            if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(name))
+                continue;
+
             bool isFolder = type == "0";
             bool isPlaylist = type == "1";
 
             if (parentId == null && name.Equals(Constants.RootPlaylistName, StringComparison.OrdinalIgnoreCase))
             {
-                this.TraverseNode(el, null, connection, library, existingCollections, songPathToId, whatIf, tx, stats, progress);
+                await this.TraverseNodeAsync(el, null, mikDao, library, stats, progress, tx,  whatIf);
                 continue;
             }
 
@@ -204,74 +171,58 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
                 continue;
             }
 
-            string collectionId = this.GetOrCreateCollectionId(name, parentId, isFolder, whatIf, connection, tx, existingCollections, stats);
+            (MikCollection collection, string collectionId) = await this.GetOrCreateCollectionAsync(name, parentId, isFolder, mikDao, stats, tx, whatIf);
             if (isPlaylist)
             {
-                this.ProcessPlaylist(el, collectionId, name, connection, library, songPathToId, whatIf, tx, stats, progress);
+                await this.ProcessPlaylistAsync(el, (collection, collectionId), mikDao, library, stats, progress, tx, whatIf);
             }
 
             if (isFolder)
             {
-                this.TraverseNode(el, collectionId, connection, library, existingCollections, songPathToId, whatIf, tx, stats, progress);
+                await this.TraverseNodeAsync(el, collectionId, mikDao, library, stats, progress, tx, whatIf);
             }
         }
     }
 
-    private void ProcessPlaylist(
-        XmlElement el,
-        string collectionId,
-        string name,
-        SqliteConnection connection,
+    private async Task ProcessPlaylistAsync(
+        XmlElement playlistNode,
+        (MikCollection collection, string id) collectionInfo,
+        MikDao mikDao,
         RekordboxXmlLibrary library,
-        Dictionary<string, string> songPathToId,
-        bool whatIf,
-        SqliteTransaction? tx,
         SyncStats stats,
-        ProgressBar progress)
+        ProgressBar progress,
+        SqliteTransaction? tx = null,
+        bool whatIf = false)
     {
         // Update progress bar context with current playlist name
-        progress.CurrentItemName = name;
-        var existingMembershipSongIds = new HashSet<string>();
-        int maxExistingSequence = -1;
-        using (var existingCmd = connection.CreateCommand())
-        {
-            existingCmd.CommandText = "SELECT SongId, Sequence FROM SongCollectionMembership WHERE CollectionId = $cid";
-            existingCmd.Parameters.AddWithValue("$cid", collectionId);
-            using var r = existingCmd.ExecuteReader();
-            while (r.Read())
-            {
-                var sid = r.GetString(0);
-                existingMembershipSongIds.Add(sid);
-                if (!r.IsDBNull(1))
-                {
-                    var seq = r.GetInt32(1);
-                    if (seq > maxExistingSequence) maxExistingSequence = seq;
-                }
-            }
-        }
+        progress.CurrentItemName = collectionInfo.collection.Name;
+
+        int maxExistingSequence = await mikDao.GetMaxSongSequenceInPlaylistAsync(collectionInfo.id);
+        var songsInPlaylist = await mikDao.GetSongsInPlaylistAsync(collectionInfo.id);
+        var songIdsByPath = await mikDao.SongIdsByPath;
 
         int sequence = maxExistingSequence + 1;
         int existingMembershipsSkipped = 0;
-        foreach (XmlElement trackNode in el.SelectNodes("TRACK")!)
+        foreach (XmlElement trackNode in playlistNode.SelectNodes("TRACK")!)
         {
             var trackId = trackNode.GetAttribute("Key");
             if (string.IsNullOrWhiteSpace(trackId))
                 continue;
 
-            var trackEl = library.Document.SelectSingleNode($"/DJ_PLAYLISTS/COLLECTION/TRACK[@TrackID='{trackId}']") as XmlElement;
-            if (trackEl == null)
+            if (library.GetTrackElementById(trackId) is not XmlElement trackEl)
                 continue;
+
             var location = trackEl.GetAttribute("Location");
             var absPath = RekordboxXmlLibrary.DecodeFileUri(location);
-            var normAbs = NormalizePath(absPath);
-            if (string.IsNullOrWhiteSpace(normAbs) || !songPathToId.TryGetValue(normAbs, out var songId))
+            var normAbs = PathUtils.NormalizePath(absPath);
+            if (string.IsNullOrWhiteSpace(normAbs) || !songIdsByPath.TryGetValue(normAbs, out var songId))
             {
                 stats.TracksMissingInMik.Add(normAbs);
-                this._log.Warn($"Song not found in MIK for playlist '{name}': {absPath} (normalized='{normAbs}')");
+                this._log.Warn($"Song not found in MIK for playlist '{collectionInfo.collection.Name}': {absPath} (normalized='{normAbs}')");
                 continue;
             }
 
-            if (existingMembershipSongIds.Contains(songId))
+            if (songsInPlaylist.Contains(songId))
             {
                 existingMembershipsSkipped++;
                 progress.Increment();
@@ -280,22 +231,14 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
 
             if (whatIf)
             {
-                this._log.Info($"[WhatIf] Would add track SongId={songId} Path='{absPath}' (normalized) to playlist '{name}' seq={sequence}");
+                this._log.Info($"[WhatIf] Would add track SongId={songId} Path='{absPath}' (normalized) to playlist '{collectionInfo.collection.Name}' seq={sequence}");
             }
             else
             {
-                using var insertMem = connection.CreateCommand();
-                insertMem.Transaction = tx;
-                insertMem.CommandText = @"INSERT INTO SongCollectionMembership (Id, SongId, CollectionId, Sequence)
-                                                   VALUES ($id, $songId, $collectionId, $seq)";
-                insertMem.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-                insertMem.Parameters.AddWithValue("$songId", songId);
-                insertMem.Parameters.AddWithValue("$collectionId", collectionId);
-                insertMem.Parameters.AddWithValue("$seq", sequence);
-                insertMem.ExecuteNonQuery();
+                await mikDao.AddSongToPlaylistAsync(songId, collectionInfo.id, sequence, tx);
                 stats.MembershipsInserted++;
-                existingMembershipSongIds.Add(songId);
-                this._log.Info($"Added track SongId={songId} Path='{absPath}' (normalized) to playlist '{name}' seq={sequence}");
+                songsInPlaylist.Add(songId);
+                this._log.Info($"Added track SongId={songId} Path='{absPath}' (normalized) to playlist '{collectionInfo.collection.Name}' seq={sequence}");
             }
 
             sequence++;
@@ -303,7 +246,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         }
 
         if (existingMembershipsSkipped > 0)
-            this._log.Info($"Playlist '{name}': skipped {existingMembershipsSkipped} already existing memberships. Max existing sequence was {maxExistingSequence}.");
+            this._log.Info($"Playlist '{collectionInfo.collection.Name}': skipped {existingMembershipsSkipped} already existing memberships.");
     }
 
     private sealed class SyncStats

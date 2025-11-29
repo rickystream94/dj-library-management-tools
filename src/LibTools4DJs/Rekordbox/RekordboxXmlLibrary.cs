@@ -39,6 +39,11 @@ public sealed class RekordboxXmlLibrary
         return this.Document.SelectSingleNode($"/DJ_PLAYLISTS/PLAYLISTS/NODE/NODE[@Name='{Constants.LibraryManagement}']");
     }
 
+    public XmlNode? GetPlaylistsRoot()
+    {
+        return this.Document.SelectSingleNode($"/DJ_PLAYLISTS/PLAYLISTS/NODE[@Type='0' and @Name='{Constants.RootPlaylistName}']");
+    }
+
     public IEnumerable<XmlElement> GetCollectionTracks()
     {
         var tracks = this.Document.SelectNodes("/DJ_PLAYLISTS/COLLECTION/TRACK");
@@ -46,6 +51,11 @@ public sealed class RekordboxXmlLibrary
             yield break;
         foreach (XmlElement el in tracks)
             yield return el;
+    }
+
+    public XmlNode? GetTrackElementById(string trackId)
+    {
+        return this.Document.SelectSingleNode($"/DJ_PLAYLISTS/COLLECTION/TRACK[@TrackID='{trackId}']");
     }
 
     public IEnumerable<XmlElement> GetTracksToDelete()
