@@ -75,7 +75,7 @@ public sealed class RekordboxXmlLibrary
             yield return t;
     }
 
-    public XmlElement InitializePlaylist(string playlistName)
+    public XmlElement InitializeLibraryManagementChildPlaylist(string playlistName)
     {
         var libraryManagementFolder = GetLibraryManagementFolder() ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found in XML.");
         if (libraryManagementFolder.SelectSingleNode($"NODE[@Name='{playlistName}']") is XmlElement existingPlaylist)
@@ -91,6 +91,43 @@ public sealed class RekordboxXmlLibrary
         return newPlaylist;
     }
 
+    public XmlElement GetOrCreateFolder(params string[] pathSegments)
+    {
+        if (pathSegments == null || pathSegments.Length == 0)
+            throw new ArgumentException("Folder path must have at least one segment.");
+
+        var root = GetLibraryManagementFolder() as XmlElement ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found in XML.");
+        XmlElement current = root;
+        foreach (var segment in pathSegments)
+        {
+            var next = current.SelectSingleNode($"NODE[@Type='0' and @Name='{segment}']") as XmlElement;
+            if (next == null)
+            {
+                next = this.Document.CreateElement("NODE");
+                next.SetAttribute(Constants.NameAttributeName, segment);
+                next.SetAttribute(Constants.TypeAttributeName, "0");
+                // Folders don't have KeyType or Entries; keep minimal attributes
+                current.AppendChild(next);
+            }
+            current = next;
+        }
+        return current;
+    }
+
+    public XmlElement GetOrCreatePlaylist(XmlElement parentFolder, string playlistName)
+    {
+        if (parentFolder == null)
+            throw new ArgumentNullException(nameof(parentFolder));
+        var existing = parentFolder.SelectSingleNode($"NODE[@Type='1' and @Name='{playlistName}']") as XmlElement;
+        if (existing != null)
+            return existing;
+
+        var newPlaylist = this.Document.CreateElement("NODE");
+        SetPlaylistAttributes(newPlaylist, playlistName);
+        parentFolder.AppendChild(newPlaylist);
+        return newPlaylist;
+    }
+
     public void AddTrackToPlaylist(XmlElement playlistNode, string trackId)
     {
         var trackNode = this.Document.CreateElement("TRACK");
@@ -101,6 +138,19 @@ public sealed class RekordboxXmlLibrary
     public void SaveAs(string outputPath)
     {
         this.Document.Save(outputPath);
+    }
+
+    // Create a timestamped backup copy of the current XML next to the original, under LibTools4DJs_Backups.
+    // Returns the full path to the created backup file.
+    public string CreateBackupCopy()
+    {
+        var xmlDir = System.IO.Path.GetDirectoryName(this.Path)!;
+        var backupDir = System.IO.Path.Combine(xmlDir, Constants.BackupFolderName);
+            Directory.CreateDirectory(backupDir);
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var backupFile = System.IO.Path.Combine(backupDir, System.IO.Path.GetFileName(this.Path) + "." + timestamp + ".bak.xml");
+        System.IO.File.Copy(this.Path, backupFile, overwrite: false);
+        return backupFile;
     }
 
     private static void SetPlaylistAttributes(XmlElement playlistNode, string playlistName)

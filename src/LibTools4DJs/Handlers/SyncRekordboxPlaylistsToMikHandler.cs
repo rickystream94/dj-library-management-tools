@@ -25,7 +25,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             try
             {
                 var dbDir = Path.GetDirectoryName(mikDbPath)!;
-                var backupDir = Path.Combine(dbDir, "LibTools4DJs_Backups");
+                var backupDir = Path.Combine(dbDir, Constants.BackupFolderName);
                 Directory.CreateDirectory(backupDir);
 
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -45,7 +45,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         if (whatIf)
             this._log.Info("[WhatIf] Simulating playlist sync. No database changes will be committed.");
 
-        MikDao mikDao = new(mikDbPath);
+        await using MikDao mikDao = new(mikDbPath);
 
         var totalTracks = CountTotalPlaylistTracks(playlistsRoot);
         var progress = new ProgressBar(totalTracks, whatIf ? "Simulating" : "Syncing");
@@ -219,8 +219,9 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         var songsInPlaylist = await mikDao.GetSongsInPlaylistAsync(collectionInfo.id);
         var songIdsByPath = await mikDao.SongIdsByPath;
 
-        int sequence = maxExistingSequence + 1;
-        int existingMembershipsSkipped = 0;
+    int sequence = maxExistingSequence + 1;
+    int existingMembershipsSkipped = 0;
+    var batchItems = new List<(string songId, string collectionId, int sequence)>();
         foreach (XmlElement trackNode in playlistNode.SelectNodes("TRACK")!)
         {
             var trackId = trackNode.GetAttribute("Key");
@@ -253,14 +254,20 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             }
             else
             {
-                await mikDao.AddSongToPlaylistAsync(songId, collectionInfo.id, sequence, tx);
-                stats.MembershipsInserted++;
+                batchItems.Add((songId, collectionInfo.id, sequence));
                 songsInPlaylist.Add(songId);
-                this._log.Info($"Added track SongId={songId} Path='{absPath}' (normalized) to playlist '{collectionInfo.collection.Name}' seq={sequence}");
+                this._log.Info($"Queued track SongId={songId} Path='{absPath}' (normalized) for playlist '{collectionInfo.collection.Name}' seq={sequence}");
             }
 
             sequence++;
             progress.Increment();
+        }
+
+        if (!whatIf && batchItems.Count > 0)
+        {
+            await mikDao.AddSongsToPlaylistBatchAsync(batchItems, tx);
+            stats.MembershipsInserted += batchItems.Count;
+            this._log.Info($"Inserted {batchItems.Count} memberships into playlist '{collectionInfo.collection.Name}'.");
         }
 
         if (existingMembershipsSkipped > 0)

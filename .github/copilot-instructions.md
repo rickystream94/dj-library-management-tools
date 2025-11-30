@@ -1,74 +1,61 @@
-## AI Coding Agent Instructions for `dj-library-management-tools`
+## AI Coding Agent Instructions (`dj-library-management-tools`)
 
-Purpose: Provide CLI & PowerShell utilities to patch gaps between Rekordbox and Mixed In Key (MIK): safe bulk deletion and syncing MIK key & energy level metadata back into a Rekordbox exported collection XML.
+Purpose: C#/.NET console utilities to bridge gaps between Rekordbox and Mixed In Key (MIK): safe bulk deletion, tag/key/energy sync, and bidirectional folder/playlist structure replication.
 
-### Architecture Snapshot
-Code lives under `src/LibTools4DJs/` (C# .NET 8 console app). Two primary commands exposed via `System.CommandLine` in `Program.cs`:
-1. `delete-tracks` → invokes `DeleteTracksHandler`.
-2. `sync-mik-tags-to-rekordbox` → invokes `SyncMixedInKeyTagsToRekordboxHandler`.
+### Core Architecture
+Located in `src/LibTools4DJs/`. Entry point `Program.cs` uses `System.CommandLine` to wire commands:
+1. `delete-tracks` → `DeleteTracksHandler`
+2. `sync-mik-tags-to-rekordbox` → `SyncMikTagsToRekordboxHandler`
+3. `sync-rekordbox-playlists-to-mik` → `SyncRekordboxPlaylistsToMikHandler`
+4. `sync-mik-folder-to-rekordbox` → `SyncMikFolderToRekordboxHandler`
 
-Core model for library: `RekordboxXmlLibrary` (wrapper over `XmlDocument`)
-- Loads exported Rekordbox XML (`RekordboxXmlLibrary.Load(path)`).
-- XPath helpers to access playlist folder `LIBRARY MANAGEMENT` & collection `<TRACK>` nodes.
-- Utilities: `DecodeFileUri`, `InitializePlaylist`, `AddTrackToPlaylist`, `UpdatePlaylistTracksCount`, `SaveAs`.
-Shared constants: `Constants.cs` (prefer using these instead of string literals when manipulating XML attributes or playlist names).
+Library XML abstraction: `RekordboxXmlLibrary` wraps `XmlDocument` providing helpers:
+- Load (`Load(path)`), decode file URIs (`DecodeFileUri`)
+- Get library management folder (`GetLibraryManagementFolder`)
+- Track enumeration (`GetCollectionTracks`)
+- Playlist/folder creation: `InitializeLibraryManagementChildPlaylist` (resetting), `GetOrCreateFolder(...)` & `GetOrCreatePlaylist(...)` (idempotent, no clearing)
+- Track addition (`AddTrackToPlaylist`), entries update (`UpdatePlaylistTracksCount`), backups (`CreateBackupCopy`), save (`SaveAs`)
+Use `Constants.cs` for all XML attribute & playlist names; never inline strings (prevents typos, keeps handlers uniform).
 
 ### Rekordbox XML Conventions
-Playlist folder required: `LIBRARY MANAGEMENT` (constant `LibraryManagement`).
-Managed playlists (created/reset by sync handler):
-- `MIK Key Analysis`
-- `MIK Energy Level Analysis`
-Deletion playlist expected name: `Delete`.
-Playlist `<NODE>` attributes set via `SetPlaylistAttributes` (Type="1", KeyType="0", Entries updated afterward). Do not hand-edit XML directly—use library methods.
-Track identification inside playlists: `<TRACK Key="<TrackID>" />` (note: playlist track node uses attribute `Key` to reference collection `TrackID`).
+Required root playlist folder: `LIBRARY MANAGEMENT`. Track reference inside playlists: `<TRACK Key="<TrackID>" />`. Playlists = `NODE Type="1"`; folders = `NODE Type="0"`. Colour mapping uses `Colour` attribute (e.g. `0xFFFF00`).
 
-### Handler Logic Essentials
-DeleteTracksHandler:
-- Builds HashSet of track IDs from Delete playlist (`GetTracksToDelete()` then `GetAttribute(Key)` of playlist track nodes).
-- Matches against collection tracks by `TrackID`; converts `Location` (URI with prefix `file://localhost/`) using `DecodeFileUri`.
-- Supports `--what-if` (no deletes). All file operations must validate existence; log via injected `ILogger`.
-SyncMixedInKeyTagsToRekordboxHandler:
-- Loads energy mapping JSON `EnergyLevelToColorCode.json` from `AppContext.BaseDirectory`.
-- Iterates all collection tracks; reads file tags via TagLib (`TagLibSharp.dll` expected in runtime bin or `lib` copied into output).
-- Comment parse heuristics: first token = key (regex `^\d{1,2}[A-G]$`); energy level regex `Energy (\d{1,2})` anywhere in comment.
-- Key updates limited to tracks where `Kind == "M4A File"` (workaround for Rekordbox limitation). Non‑M4A counted/skipped.
-- Energy level maps to `Colour` attribute (hex code like `0xFFFF00`). Only updates when different.
-- Adds affected tracks to corresponding analysis playlists using `AddTrackToPlaylist` and increments summary counts; final XML saved as timestamped `rekordbox_collection_YYYY-MM-DD_HH-mm.xml`.
+### Mixed In Key DB Access
+`MikDao` (SQLite via `Microsoft.Data.Sqlite`): lazy connection; methods for playlist hierarchy & membership:
+- `GetRootFolderIdByNameAsync`
+- `GetChildFoldersAsync(parentId)` / `GetChildPlaylistsAsync(parentId)`
+- `GetPlaylistSongFilesAsync(collectionId)`
+- Prepared/batched membership inserts for performance (`AddSongsToPlaylistBatchAsync`, transaction-aware reuse).
+Uniqueness for folders/playlists: tuple `(ParentId, Name, IsFolder)` cached in `ExistingCollections`.
+Path matching normalizes absolute file paths via `PathUtils.NormalizePath` before lookup in `SongIdsByPath`.
 
-### Build & Run Workflow
-Prereqs: .NET 8 SDK. (PowerShell scripts remain separate in `scripts/`.)
-Build: `dotnet build LibTools4DJs.sln`.
-Run examples (from repo root):
-- Delete: `dotnet run --project src/LibTools4DJs -- delete-tracks --xml D:\RekordboxExports\rekordbox.xml --what-if`
-- Sync: `dotnet run --project src/LibTools4DJs -- sync-mik-tags-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml`
-Binary output: `src/LibTools4DJs/bin/{Debug|Release}/net8.0/` (mapping JSON resolves from `AppContext.BaseDirectory` under `Configuration` folder). Ensure `Configuration/EnergyLevelToColorCode.json` is copied to output (Content item with `CopyToOutputDirectory`).
+### Handlers Overview
+`DeleteTracksHandler`: builds deletion set from `LIBRARY MANAGEMENT/Delete` playlist; validates file existence; `--what-if` prevents actual deletion.
+`SyncMikTagsToRekordboxHandler`: reads tags with TagLib; regex-based key & energy extraction; updates M4A tonality & colour (energy→hex JSON in `Configuration/EnergyLevelToColorCode.json`); collects modified tracks into analysis playlists.
+`SyncRekordboxPlaylistsToMikHandler`: mirrors Rekordbox folder/playlist tree into MIK DB (additive; never deletes existing collections; skips existing memberships).
+`SyncMikFolderToRekordboxHandler`: mirrors a specified MIK folder hierarchy into Rekordbox under `LibTools4DJs_SyncFromMIK` using true nested folders (`GetOrCreateFolder`); playlists idempotently populated (no duplicate tracks); prints ASCII tree summary of additions.
 
-### Extension & Modification Guidelines
-- Add new commands: modify `Program.cs`; keep constant for command name; follow existing option parsing pattern with validation.
-- When adding new playlists, always go through `InitializePlaylist` to avoid stale entries & attribute drift.
-- Use `Constants` for XML attribute names; never hardcode (avoids typos & keeps handlers consistent).
-- If supporting non‑M4A key updates, remove the `Kind` gate but update summary counters & README alignment.
-- For new metadata mappings, create a dedicated JSON and load similar to energy mapping; keep integer→string dictionary with hex codes.
-- Prefer streaming iteration (handlers currently load all tracks into memory; acceptable given typical library sizes—optimize only if profiling shows need).
+### Backup & Persistence
+Before mutating XML (non `--what-if`), handlers call `RekordboxXmlLibrary.CreateBackupCopy()` → timestamped `.bak.xml` in `LibTools4DJs_Backups` sibling folder, then save in place (`SaveAs(library.Path)`). Always log the backup path.
 
-### Error & Logging Patterns
-Handlers use injected `ILogger` (see `ConsoleLogger.cs`) with methods `Info`, `Warn`, `Error`. Follow pattern: validate early, warn on skips (missing file, malformed comment), error on exceptional conditions (I/O, TagLib failures). Summaries printed at end with counts for each category.
+### Build & Execution Workflow
+Prereq: .NET 8/10 SDK (solution: `LibTools4DJs.sln`). Build: `dotnet build LibTools4DJs.sln`. Run examples:
+```powershell
+dotnet run --project src/LibTools4DJs -- delete-tracks --xml D:\RekordboxExports\rekordbox.xml --what-if
+dotnet run --project src/LibTools4DJs -- sync-mik-tags-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml
+dotnet run --project src/LibTools4DJs -- sync-rekordbox-playlists-to-mik --xml D:\RekordboxExports\rekordbox.xml --what-if
+dotnet run --project src/LibTools4DJs -- sync-mik-folder-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml --mik-folder "My DJ Prep" --what-if
+```
+Auto-resolve MIK DB path: `$env:USERPROFILE\AppData\Local\Mixed In Key\Mixed In Key\<version>\MIKStore.db` unless `--mik-db` supplied.
 
-### Safe Operations & Testing Notes
-- Always test destructive operations using `--what-if` first (delete command).
-- For sync changes, verify generated playlists counts via `Entries` attribute after run; playlist counts are set post‑processing with `UpdatePlaylistTracksCount`.
-- Keep backups of original Rekordbox XML when adjusting logic around file path decoding or tag parsing.
+### Logging & What-If Pattern
+All handlers accept `--what-if` for dry-run. Use `ConsoleLogger.Info/Warn/Error`; warn on skips (missing paths, no energy tag), error on IO/TagLib exceptions.
 
-### Common Pitfalls
-- Missing `LIBRARY MANAGEMENT` folder → handlers abort (explicit exception in sync, silent skip in delete). Provide clear guidance or auto-create in future enhancement.
-- Energy mapping file not found → sync throws; ensure file exists in `Configuration/` in the output directory.
-- TagLib initialization failures for corrupt or unsupported files → error logged per track, processing continues.
+### Extension Guidelines
+Add new commands by updating `Program.cs`: declare constant, create `Command` with validated `Option`s, and delegate to a new handler. Reuse `HandleMikCommandAsync` for MIK DB aware commands. Prefer `GetOrCreateFolder/Playlist` for idempotent XML changes.
 
-### Quick Reference Constants (do not rename without updating README)
-LibraryManagement, MIKKeyAnalysis, MIKEnergyAnalysis, DeletePlaylistName, TrackID, Location, Kind, Tonality, Colour.
-
-### When Unsure
-Inspect sample XML structure via XPath queries in `RekordboxXmlLibrary`; replicate existing patterns. Ask for clarification before introducing new XML schema elements.
+### Pitfalls & Checks
+Missing `LIBRARY MANAGEMENT` → throw early. Ensure energy mapping JSON present in output `Configuration/`. Avoid clearing existing playlists unless intentionally resetting (only `InitializeLibraryManagementChildPlaylist` performs a wipe). Always normalize file paths before key lookups.
 
 ---
-Feedback welcome: clarify any ambiguous workflow or add missing conventions; keep file under 50 lines by pruning generic advice.
+Feedback welcome: request clarifications or additions (tests strategy, future commands) to evolve these agent notes.

@@ -44,7 +44,7 @@ namespace LibTools4DJs.MixedInKey
         public async Task<int> GetMaxSongSequenceInPlaylistAsync(string collectionId)
         {
             using var cmd = (await this.Connection).CreateCommand();
-            cmd.CommandText = "SELECT IFNULL(MAX(Sequence), -1) FROM SongCollectionMembership WHERE CollectionId = $cid";
+            cmd.CommandText = "SELECT COALESCE(MAX(Sequence), -1) FROM SongCollectionMembership WHERE CollectionId = $cid";
             cmd.Parameters.AddWithValue("$cid", collectionId);
             var result = await cmd.ExecuteScalarAsync();
             return Convert.ToInt32(result);
@@ -68,20 +68,29 @@ namespace LibTools4DJs.MixedInKey
 
         public async Task AddSongToPlaylistAsync(string songId, string collectionId, int sequence, SqliteTransaction? tx = null)
         {
-            using var insertMem = (await this.Connection).CreateCommand();
-            insertMem.Transaction = tx;
-            insertMem.CommandText = @"INSERT INTO SongCollectionMembership (Id, SongId, CollectionId, Sequence)
-                                                   VALUES ($id, $songId, $collectionId, $seq)";
-            insertMem.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-            insertMem.Parameters.AddWithValue("$songId", songId);
-            insertMem.Parameters.AddWithValue("$collectionId", collectionId);
-            insertMem.Parameters.AddWithValue("$seq", sequence);
-            await insertMem.ExecuteNonQueryAsync();
+            using var cmd = (await this.Connection).CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"INSERT INTO SongCollectionMembership (Id, SongId, CollectionId, Sequence)
+                                    VALUES ($id, $songId, $collectionId, $seq)";
+            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            cmd.Parameters.AddWithValue("$songId", songId);
+            cmd.Parameters.AddWithValue("$collectionId", collectionId);
+            cmd.Parameters.AddWithValue("$seq", sequence);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        public async Task AddSongsToPlaylistBatchAsync(IEnumerable<(string songId, string collectionId, int sequence)> items, SqliteTransaction? tx = null)
+        {
+            foreach (var (songId, collectionId, sequence) in items)
+            {
+                await AddSongToPlaylistAsync(songId, collectionId, sequence, tx);
+            }
         }
 
         public async Task<SqliteTransaction> BeginTransactionAsync()
         {
-            return (await this.Connection).BeginTransaction();
+            var tx = (await this.Connection).BeginTransaction();
+            return tx;
         }
 
         public async ValueTask DisposeAsync()
@@ -90,6 +99,7 @@ namespace LibTools4DJs.MixedInKey
             {
                 var connection = await this.Connection;
                 await connection.CloseAsync();
+                await connection.DisposeAsync();
             }
         }
 
@@ -98,6 +108,64 @@ namespace LibTools4DJs.MixedInKey
             var connection = new SqliteConnection($"Data Source={this.mikDbPath}");
             await connection.OpenAsync();
             return connection;
+        }
+
+        // New helper: get root folder id by name
+        public async Task<string?> GetRootFolderIdByNameAsync(string name)
+        {
+            using var cmd = (await this.Connection).CreateCommand();
+            cmd.CommandText = "SELECT Id FROM Collection WHERE Name = $name AND IsFolder = 1 AND ParentFolderId IS NULL";
+            cmd.Parameters.AddWithValue("$name", name);
+            var result = await cmd.ExecuteScalarAsync();
+            return result as string;
+        }
+
+        public async Task<List<(string Id, string Name)>> GetChildFoldersAsync(string parentId)
+        {
+            var list = new List<(string, string)>();
+            using var cmd = (await this.Connection).CreateCommand();
+            cmd.CommandText = "SELECT Id, Name FROM Collection WHERE IsFolder = 1 AND ParentFolderId = $pid";
+            cmd.Parameters.AddWithValue("$pid", parentId);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var id = reader.GetString(0);
+                var name = reader.GetString(1);
+                list.Add((id, name));
+            }
+            return list;
+        }
+
+        public async Task<List<(string Id, string Name)>> GetChildPlaylistsAsync(string parentId)
+        {
+            var list = new List<(string, string)>();
+            using var cmd = (await this.Connection).CreateCommand();
+            cmd.CommandText = "SELECT Id, Name FROM Collection WHERE IsFolder = 0 AND ParentFolderId = $pid";
+            cmd.Parameters.AddWithValue("$pid", parentId);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var id = reader.GetString(0);
+                var name = reader.GetString(1);
+                list.Add((id, name));
+            }
+            return list;
+        }
+
+        // New helper: get ordered song file paths for a playlist
+        public async Task<List<string>> GetPlaylistSongFilesAsync(string collectionId)
+        {
+            var files = new List<string>();
+            using var cmd = (await this.Connection).CreateCommand();
+            cmd.CommandText = "SELECT s.File FROM Song s JOIN SongCollectionMembership m ON s.Id = m.SongId WHERE m.CollectionId = $cid ORDER BY m.Sequence";
+            cmd.Parameters.AddWithValue("$cid", collectionId);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var file = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                files.Add(file);
+            }
+            return files;
         }
 
         private async Task<Dictionary<MikCollection, string>> GetExistingCollectionsAsync()

@@ -8,16 +8,22 @@ using LibTools4DJs.Logging;
 
 namespace LibTools4DJs.Handlers;
 
-public sealed class SyncMixedInKeyTagsToRekordboxHandler
+public sealed class SyncMikTagsToRekordboxHandler
 {
     private readonly ILogger _log;
     private readonly Regex EnergyLevelRegex = new(@"Energy (\d{1,2})", RegexOptions.Compiled);
     private readonly Regex InitialKeyRegex = new(@"^\d{1,2}[A-G]$", RegexOptions.Compiled);
 
-    public SyncMixedInKeyTagsToRekordboxHandler(ILogger log) => _log = log;
+    public SyncMikTagsToRekordboxHandler(ILogger log) => _log = log;
 
     public Task RunAsync(RekordboxXmlLibrary library, bool whatIf)
     {
+        // Create backup before any modifications when not in what-if
+        if (!whatIf)
+        {
+            var backupFile = library.CreateBackupCopy();
+            _log.Info($"Creating backup of Rekordbox XML: {backupFile}");
+        }
         var energyLevelToColourCode = GetEnergyLevelToColourMapping();
         var allTracks = library.GetCollectionTracks().ToList();
         _ = library.GetLibraryManagementFolder() ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found.");
@@ -27,8 +33,8 @@ public sealed class SyncMixedInKeyTagsToRekordboxHandler
         if (!whatIf)
         {
             // Create custom playlists the fixed tracks will be added to, so it's easier to re-import them in Rekordbox
-            keyAnalysisPlaylist = library.InitializePlaylist(Constants.MIKKeyAnalysis);
-            energyAnalysisPlaylist = library.InitializePlaylist(Constants.MIKEnergyAnalysis);
+            keyAnalysisPlaylist = library.InitializeLibraryManagementChildPlaylist(Constants.MIKKeyAnalysis);
+            energyAnalysisPlaylist = library.InitializeLibraryManagementChildPlaylist(Constants.MIKEnergyAnalysis);
         }
 
         if (whatIf)
@@ -137,9 +143,8 @@ public sealed class SyncMixedInKeyTagsToRekordboxHandler
             RekordboxXmlLibrary.UpdatePlaylistTracksCount(keyAnalysisPlaylist!, fixedKey);
             RekordboxXmlLibrary.UpdatePlaylistTracksCount(energyAnalysisPlaylist!, fixedColor);
 
-            string outputFilePath = Path.Combine(Path.GetDirectoryName(library.Path)!, $"rekordbox_collection_{DateTime.Now:yyyy-MM-dd_HH-mm}.xml");
-            library.SaveAs(outputFilePath);
-            _log.Info($"\nDone!\nTracks processed: {allTracks.Count}\nFixed key: {fixedKey}\nFixed color: {fixedColor}\nMissing key: {missingKey}\nMissing energy: {missingEnergy}\nNon-M4A skipped for key: {skippedNonM4A}\nMissing files: {missingFile}\nFailed to read tags: {failedToReadTags}\nNew XML: {outputFilePath}");
+            library.SaveAs(library.Path);
+            _log.Info($"\nDone!\nTracks processed: {allTracks.Count}\nFixed key: {fixedKey}\nFixed color: {fixedColor}\nMissing key: {missingKey}\nMissing energy: {missingEnergy}\nNon-M4A skipped for key: {skippedNonM4A}\nMissing files: {missingFile}\nFailed to read tags: {failedToReadTags}\nXML updated in place: {library.Path}");
         }
         else
         {

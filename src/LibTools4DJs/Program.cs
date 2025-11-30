@@ -10,6 +10,7 @@ internal static class Program
     private const string DeleteTracksCommand = "delete-tracks";
     private const string SyncMikToRekordboxCommand = "sync-mik-tags-to-rekordbox";
     private const string SyncRekordboxPlaylistsToMikCommand = "sync-rekordbox-playlists-to-mik";
+    private const string SyncMikFolderToRekordboxCommand = "sync-mik-folder-to-rekordbox";
 
     private static async Task<int> Main(string[] args)
     {
@@ -68,7 +69,7 @@ internal static class Program
                     (whatIfOption.Name, whatIf)
                 ]);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
-            var handler = new SyncMixedInKeyTagsToRekordboxHandler(console);
+            var handler = new SyncMikTagsToRekordboxHandler(console);
             await handler.RunAsync(library, whatIf);
         }, xmlOption, whatIfOption);
 
@@ -108,56 +109,106 @@ internal static class Program
         };
         syncPlaylistsCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, bool whatIf) =>
         {
-            var console = new ConsoleLogger();
-
-            // Resolve MIK DB path if not provided
-            string resolvedMikDbPath;
-            if (mikDb is not null)
-            {
-                resolvedMikDbPath = mikDb.FullName;
-            }
-            else
-            {
-                var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
-                if (string.IsNullOrWhiteSpace(userProfile))
-                {
-                    console.Error("USERPROFILE environment variable is not set. Cannot auto-resolve MIK database path.");
-                    return;
-                }
-                // C:\Users\<user>\AppData\Local\Mixed In Key\Mixed In Key\<version>\MIKStore.db
-                resolvedMikDbPath = Path.Combine(
-                    userProfile,
-                    "AppData",
-                    "Local",
-                    "Mixed In Key",
-                    "Mixed In Key",
-                    mikVersion,
-                    "MIKStore.db");
-
-                if (!File.Exists(resolvedMikDbPath))
-                {
-                    console.Error($"Auto-resolved MIK database file not found: {resolvedMikDbPath}. Provide --mik-db explicitly or adjust --mik-version.");
-                    return;
-                }
-            }
-
-            console.PrintCommandInvocation(SyncRekordboxPlaylistsToMikCommand,
-                [
-                    (xmlOption.Name, xml.FullName),
-                    (mikDbOption.Name, resolvedMikDbPath),
-                    (mikVersionOption.Name, mikVersion),
-                    (whatIfOption.Name, whatIf)
-                ]);
-
-            var library = RekordboxXmlLibrary.Load(xml.FullName);
-            var handler = new SyncRekordboxPlaylistsToMikHandler(console);
-            await handler.RunAsync(library, resolvedMikDbPath, whatIf);
+            await HandleMikCommandAsync(SyncRekordboxPlaylistsToMikCommand, xml, mikDb, mikVersion, whatIf,
+                (console, library, mikPath, dryRun) => new SyncRekordboxPlaylistsToMikHandler(console).RunAsync(library, mikPath, dryRun));
         }, xmlOption, mikDbOption, mikVersionOption, whatIfOption);
+
+        // sync-mik-folder-to-rekordbox command
+        var mikFolderNameOption = new Option<string>(
+            name: "--mik-folder",
+            description: $"Name of the Mixed In Key folder to mirror into Rekordbox XML under {Constants.SyncFromMikFolderName}",
+            parseArgument: result =>
+            {
+                var token = result.Tokens.SingleOrDefault()?.Value;
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    result.ErrorMessage = "--mik-folder is required";
+                    return null!;
+                }
+                return token;
+            }) { IsRequired = true };
+
+        var syncMikFolderCmd = new Command(SyncMikFolderToRekordboxCommand, "Mirror a Mixed In Key folder hierarchy back into Rekordbox XML under a dedicated folder; idempotent and supports --what-if.")
+        {
+            xmlOption,
+            mikDbOption,
+            mikVersionOption,
+            mikFolderNameOption,
+            whatIfOption
+        };
+        syncMikFolderCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, string mikFolder, bool whatIf) =>
+        {
+            await HandleMikCommandAsync(SyncMikFolderToRekordboxCommand, xml, mikDb, mikVersion, whatIf,
+                (console, library, mikPath, dryRun) => new SyncMikFolderToRekordboxHandler(console).RunAsync(library, mikPath, mikFolder, dryRun),
+                extraParams: new[] { (mikFolderNameOption.Name, (object?)mikFolder) });
+        }, xmlOption, mikDbOption, mikVersionOption, mikFolderNameOption, whatIfOption);
 
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);
         root.AddCommand(syncPlaylistsCmd);
+        root.AddCommand(syncMikFolderCmd);
 
         return await root.InvokeAsync(args);
+    }
+
+    private static string? ResolveMikDbPath(ConsoleLogger log, FileInfo? mikDb, string mikVersion)
+    {
+        if (mikDb is not null)
+            return mikDb.FullName;
+
+        var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        if (string.IsNullOrWhiteSpace(userProfile))
+        {
+            log.Error("USERPROFILE environment variable is not set. Cannot auto-resolve MIK database path.");
+            return null;
+        }
+        var resolved = Path.Combine(
+            userProfile,
+            "AppData",
+            "Local",
+            "Mixed In Key",
+            "Mixed In Key",
+            mikVersion,
+            "MIKStore.db");
+        if (!File.Exists(resolved))
+        {
+            log.Error($"Auto-resolved MIK database file not found: {resolved}. Provide --mik-db explicitly or adjust --mik-version.");
+            return null;
+        }
+        return resolved;
+    }
+
+    private static void PrintInvocation(ConsoleLogger log, string command, params (string Name, object? Value)[] args)
+    {
+        log.PrintCommandInvocation(command, args);
+    }
+
+    private static async Task HandleMikCommandAsync(
+        string commandName,
+        FileInfo xml,
+        FileInfo? mikDb,
+        string mikVersion,
+        bool whatIf,
+        Func<ConsoleLogger, RekordboxXmlLibrary, string, bool, Task> handlerInvoker,
+        (string Name, object? Value)[]? extraParams = null)
+    {
+        var console = new ConsoleLogger();
+        var resolvedMikDbPath = ResolveMikDbPath(console, mikDb, mikVersion);
+        if (resolvedMikDbPath is null) return;
+
+        var paramList = new List<(string Name, object? Value)>
+        {
+            ("--xml", xml.FullName),
+            ("--mik-db", resolvedMikDbPath),
+            ("--mik-version", mikVersion),
+            ("--what-if", whatIf)
+        };
+        if (extraParams is not null)
+            paramList.AddRange(extraParams);
+
+        PrintInvocation(console, commandName, paramList.ToArray());
+
+        var library = RekordboxXmlLibrary.Load(xml.FullName);
+        await handlerInvoker(console, library, resolvedMikDbPath, whatIf);
     }
 }

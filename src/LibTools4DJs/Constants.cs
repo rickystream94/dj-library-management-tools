@@ -21,6 +21,8 @@
         internal const string CUEAnalysisPlaylistName = "CUE Analysis Playlist";
         internal const string RootPlaylistName = "ROOT";
         internal const string MikCuePointsPlaylistName = "MIK Cue Points";
+        internal const string SyncFromMikFolderName = "LibTools4DJs_SyncFromMIK";
+        internal const string BackupFolderName = "LibTools4DJs_Backups";
         #endregion
 
         #region Mixed In Key
