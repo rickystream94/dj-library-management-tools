@@ -2,15 +2,32 @@
 
 Console utilities to help DJs with advanced library management tasks involving [**Rekordbox**](https://rekordbox.com/) and [**Mixed In Key**](https://mixedinkey.com/).
 
-## Features
+## Table of Contents
 
-| Feature | Command |
-|---------|---------|
-| Bulk delete tracks (from Rekordbox collection and from disk) | `delete-tracks` |
-| Sync MIK key for M4A tracks to Rekordbox XML | `sync-mik-tags-to-rekordbox` |
-| Map MIK energy level to colour code in Rekordbox XML | `sync-mik-tags-to-rekordbox` |
-| Sync Rekordbox library structure (folders and playlists) to MIK | `sync-rekordbox-playlists-to-mik` |
-| Sync a MIK folder and all its child collections (folders and playlists) to Rekordbox XML | `sync-mik-folder-to-rekordbox` |
+1. [Features & Commands Summary](#features--commands-summary)
+1. [Notes](#notes)
+1. [Build status](#build-status)
+1. [Prerequisites](#prerequisites)
+1. [Quick Start](#quick-start)
+	- [`delete-tracks`](#delete-tracks)
+	- [`sync-mik-tags-to-rekordbox`](#sync-mik-tags-to-rekordbox)
+	- [`sync-rekordbox-library-to-mik`](#sync-rekordbox-library-to-mik)
+	- [`sync-mik-folder-to-rekordbox`](#sync-mik-folder-to-rekordbox)
+1. [Logging flags](#logging-flags)
+1. [Motivation & Problems Addressed](#motivation--problems-addressed)
+1. [Default Energy → Colour Mapping](#default-energy--colour-mapping)
+1. [Troubleshooting](#troubleshooting)
+
+## Features & Commands Summary
+
+| Command | Purpose | Key Options | Dry-Run? | Output Artifacts |
+|---------|---------|------------|---------|------------------|
+| `delete-tracks` | Safely remove files & XML entries defined by the `LIBRARY MANAGEMENT/Delete` playlist. | `--xml <path>`, `--what-if` | Yes (`--what-if`) | Console summary; backup XML. |
+| `sync-mik-tags-to-rekordbox` | Update Key (M4A only) & Colour from MIK Energy; create analysis playlists. | `--xml <path>`, `--mik-db <path>`, `--mik-version <ver>`, `--what-if` | Yes | `MIK Key Analysis`, `MIK Energy Level Analysis`; backup XML. |
+| `sync-rekordbox-library-to-mik` | Mirror Rekordbox folder & playlist tree into MIK DB (additive). | `--xml <path>`, `--mik-db <path>`, `--mik-version <ver>`, `--what-if` | Yes | New collections in MIK DB; console hierarchy summary. |
+| `sync-rekordbox-library-to-mik` (with `--reset-mik-library`) | Same as above, but first wipes MIK collections/memberships, preserving system rows. Use when you want to fully recreate the structure from Rekordbox. | `--reset-mik-library` | N/A | Clean slate in MIK DB before sync. |
+| `sync-mik-folder-to-rekordbox` | Mirror one MIK folder subtree into Rekordbox under `LibTools4DJs_SyncFromMIK`. | `--xml <path>`, `--mik-folder <name>`, `--mik-db <path>`, `--mik-version <ver>`, `--what-if` | Yes | New folders/playlists; ASCII tree summary; backup XML. |
+| Global logging flags | Control verbosity and persistence of logs. | `--debug`, `--save-logs` | N/A | Verbose console output (debug) and log file in `LibTools4DJs_Logs/`. |
 
 ## Notes
 - Use the optional `--what-if` parameter first to simulate changes (no file system deletes, no DB writes, no XML modifications).
@@ -43,7 +60,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 1. Clone repo: `git clone https://github.com/rickystream94/dj-library-management-tools.git`
 1. `cd dj-library-management-tools`
 1. Build: `dotnet build .\LibTools4DJs.sln -c Release`.
-1. Find the generated `LibToolsForDJs.exe` under the `bin` folder.
+1. Find the generated `LibTools4DJs.exe` under the `bin` folder.
 
 ### After execution of sync commands
 1. Rekordbox XML is updated in place; a backup copy is stored under `LibTools4DJs_Backups` (same directory as original XML).
@@ -54,7 +71,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 	- A top-level folder `LibTools4DJs_SyncFromMIK` containing mirrored MIK folder hierarchy and playlists (from `sync-mik-folder-to-rekordbox`).
 4. Select tracks in the analysis playlists and import into the collection to reflect updated Key/Colour metadata inside Rekordbox.
 
-### Delete Tracks
+### `delete-tracks`
 
 Bulk removes audio files from disk and their corresponding track entries from the Rekordbox collection. The set of tracks to delete is defined by placing them in (or matching rules for) the `LIBRARY MANAGEMENT/Delete` playlist. Use `--what-if` first to review what would be deleted without performing irreversible operations.
 
@@ -62,7 +79,7 @@ Bulk removes audio files from disk and their corresponding track entries from th
 LibTools4DJs.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
 ```
 
-### Sync MIK Key & Energy
+### `sync-mik-tags-to-rekordbox`
 
 Reads each track's tags (via Mixed In Key pre-written comments) to update the musical key for M4A tracks and assign a colour based on MIK energy level. Produces analysis playlists (`MIK Key Analysis`, `MIK Energy Level Analysis`) listing only the modified tracks so you can easily re-import them into Rekordbox.
 
@@ -70,7 +87,7 @@ Reads each track's tags (via Mixed In Key pre-written comments) to update the mu
 LibTools4DJs.exe sync-mik-tags-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
 ```
 
-### Sync Rekordbox Playlists To Mixed In Key
+### `sync-rekordbox-library-to-mik`
 Replicates the Rekordbox playlist & folder hierarchy into the Mixed In Key database (`MIKStore.db`). Existing playlists/folders in MIK are never deleted (safe additive sync). Track memberships are inserted only if not already present (idempotent behavior).
 
 The tool searches for the MIK database in the default location location:
@@ -81,10 +98,11 @@ The default version is **11.0**, but it can be overridden with the `--mik-versio
 
 Usage:
 ```powershell
-LibTools4DJs.exe sync-rekordbox-playlists-to-mik --xml "D:\RekordboxExports\rekordbox.xml" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"]
+LibTools4DJs.exe sync-rekordbox-library-to-mik --xml "D:\RekordboxExports\rekordbox.xml" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"] [--reset-mik-library] [--debug] [--save-logs]
 ```
+When `--reset-mik-library` is used, the tool deletes all rows in `SongCollectionMembership` and all rows in `Collection` except the default system ones identified by `Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL`. Runs within a transaction; skipped in `--what-if`.
 
-### Sync MIK Folder To Rekordbox
+### `sync-mik-folder-to-rekordbox`
 Mirrors a chosen Mixed In Key root folder (and all nested folders & playlists) into the Rekordbox XML under the `LIBRARY MANAGEMENT/LibTools4DJs_SyncFromMIK` hierarchy. Existing Rekordbox playlists are not cleared—tracks are only appended if not already present (idempotent). Duplicates are avoided.
 
 The command creates a backup of the XML, then updates it in place unless `--what-if` is used.
@@ -96,6 +114,19 @@ Usage:
 LibTools4DJs.exe sync-mik-folder-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" --mik-folder "My DJ Prep" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"]
 ```
 Output summary includes an ASCII tree of folders/playlists with counts of tracks added.
+
+---
+
+## Logging Flags
+All commands accept two optional logging flags:
+
+- `--debug` enables verbose debug output (granular per-item actions). Without it, only summaries, warnings, and errors are printed.
+- `--save-logs` persists all log messages (including debug ones even if not shown on console) to a timestamped file under `LibTools4DJs_Logs/` in the current working directory.
+
+Example with both:
+```powershell
+LibTools4DJs.exe sync-rekordbox-library-to-mik --xml "D:\RekordboxExports\rekordbox.xml" --debug --save-logs
+```
 
 ---
 

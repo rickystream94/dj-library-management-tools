@@ -11,38 +11,50 @@ namespace LibTools4DJs.Handlers;
 public sealed class SyncMikTagsToRekordboxHandler
 {
     private readonly ILogger _log;
+    private readonly RekordboxXmlLibrary _library;
     private readonly Regex EnergyLevelRegex = new(@"Energy (\d{1,2})", RegexOptions.Compiled);
     private readonly Regex InitialKeyRegex = new(@"^\d{1,2}[A-G]$", RegexOptions.Compiled);
+    private ProgressBar? _progress;
 
-    public SyncMikTagsToRekordboxHandler(ILogger log) => _log = log;
+    public SyncMikTagsToRekordboxHandler(RekordboxXmlLibrary library, ILogger log)
+    {
+        this._log = log ?? throw new ArgumentNullException(nameof(log));
+        this._library = library ?? throw new ArgumentNullException(nameof(library));
+    }
 
-    public Task RunAsync(RekordboxXmlLibrary library, bool whatIf)
+    public Task RunAsync(bool whatIf, bool debugEnabled = false)
     {
         // Create backup before any modifications when not in what-if
         if (!whatIf)
         {
-            var backupFile = library.CreateBackupCopy();
-            _log.Info($"Creating backup of Rekordbox XML: {backupFile}");
+            var backupFile = this._library.CreateBackupCopy();
+            _log.Debug($"Creating backup of Rekordbox XML: {backupFile}");
         }
         var energyLevelToColourCode = GetEnergyLevelToColourMapping();
-        var allTracks = library.GetCollectionTracks().ToList();
-        _ = library.GetLibraryManagementFolder() ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found.");
+        var allTracks = this._library.GetCollectionTracks().ToList();
+        _ = this._library.GetLibraryManagementFolder() ?? throw new InvalidOperationException($"'{Constants.LibraryManagement}' playlist folder not found.");
 
         XmlElement? keyAnalysisPlaylist = null;
         XmlElement? energyAnalysisPlaylist = null;
         if (!whatIf)
         {
             // Create custom playlists the fixed tracks will be added to, so it's easier to re-import them in Rekordbox
-            keyAnalysisPlaylist = library.InitializeLibraryManagementChildPlaylist(Constants.MIKKeyAnalysis);
-            energyAnalysisPlaylist = library.InitializeLibraryManagementChildPlaylist(Constants.MIKEnergyAnalysis);
+            keyAnalysisPlaylist = this._library.InitializeLibraryManagementChildPlaylist(Constants.MIKKeyAnalysis);
+            energyAnalysisPlaylist = this._library.InitializeLibraryManagementChildPlaylist(Constants.MIKEnergyAnalysis);
         }
 
         if (whatIf)
         {
-            _log.Info("[WhatIf] Simulating sync. No XML modifications or output file will be written.");
+            _log.Debug("[WhatIf] Simulating sync. No XML modifications or output file will be written.");
         }
 
         int fixedKey = 0, fixedColor = 0, missingEnergy = 0, missingKey = 0, skippedNonM4A = 0, missingFile = 0, failedToReadTags = 0;
+
+        if (!debugEnabled)
+        {
+            this._progress = new ProgressBar(allTracks.Count, whatIf ? "Simulating" : "Syncing Tags");
+            this._log.WithProgressBar(this._progress);
+        }
 
         foreach (var track in allTracks)
         {
@@ -51,7 +63,7 @@ public sealed class SyncMikTagsToRekordboxHandler
             var path = RekordboxXmlLibrary.DecodeFileUri(location);
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                _log.Warn($"Track not found: {path}");
+                this._log.Warn($"Track not found: {path}");
                 missingFile++;
                 continue;
             }
@@ -64,7 +76,7 @@ public sealed class SyncMikTagsToRekordboxHandler
             }
             catch (Exception ex)
             {
-                _log.Error($"Failed to read tag for '{trackFileName}': {ex.Message}");
+                this._log.Error($"Failed to read tag for '{trackFileName}': {ex.Message}");
                 failedToReadTags++;
                 continue;
             }
@@ -88,13 +100,13 @@ public sealed class SyncMikTagsToRekordboxHandler
                     {
                         if (whatIf)
                         {
-                            _log.Info($"[WhatIf] Updating track color for '{trackFileName}': {currentColor} -> {expectedColor} (energy {energyLevel})");
+                            this._log.Debug($"[WhatIf] Updating track color for '{trackFileName}': {currentColor} -> {expectedColor} (energy {energyLevel})");
                         }
                         else
                         {
                             track.SetAttribute(Constants.ColourAttributeName, expectedColor);
-                            library.AddTrackToPlaylist(energyAnalysisPlaylist!, trackId);
-                            _log.Info($"Updated track color for '{trackFileName}': {currentColor} -> {expectedColor} (energy {energyLevel})");
+                            this._library.AddTrackToPlaylist(energyAnalysisPlaylist!, trackId);
+                            this._log.Debug($"Updated track color for '{trackFileName}': {currentColor} -> {expectedColor} (energy {energyLevel})");
                         }
                         fixedColor++;
                     }
@@ -117,7 +129,7 @@ public sealed class SyncMikTagsToRekordboxHandler
             if (string.IsNullOrWhiteSpace(initialKey) || !this.InitialKeyRegex.IsMatch(initialKey))
             {
                 missingKey++;
-                _log.Warn($"Invalid or missing key token for '{trackFileName}'");
+                this._log.Warn($"Invalid or missing key token for '{trackFileName}'");
                 continue;
             }
 
@@ -126,16 +138,18 @@ public sealed class SyncMikTagsToRekordboxHandler
             {
                 if (whatIf)
                 {
-                    _log.Info($"[WhatIf] Would fix tonality for '{trackFileName}': {currentTonality} -> {initialKey}");
+                    this._log.Debug($"[WhatIf] Would fix tonality for '{trackFileName}': {currentTonality} -> {initialKey}");
                 }
                 else
                 {
                     track.SetAttribute(Constants.TonalityAttributeName, initialKey);
-                    library.AddTrackToPlaylist(keyAnalysisPlaylist!, trackId);
-                    _log.Info($"Fixed tonality for '{trackFileName}': {currentTonality} -> {initialKey}");
+                    this._library.AddTrackToPlaylist(keyAnalysisPlaylist!, trackId);
+                    this._log.Debug($"Fixed tonality for '{trackFileName}': {currentTonality} -> {initialKey}");
                 }
                 fixedKey++;
             }
+
+            this._progress?.Increment();
         }
 
         if (!whatIf)
@@ -143,19 +157,37 @@ public sealed class SyncMikTagsToRekordboxHandler
             RekordboxXmlLibrary.UpdatePlaylistTracksCount(keyAnalysisPlaylist!, fixedKey);
             RekordboxXmlLibrary.UpdatePlaylistTracksCount(energyAnalysisPlaylist!, fixedColor);
 
-            library.SaveAs(library.Path);
-            _log.Info($"\nDone!\nTracks processed: {allTracks.Count}\nFixed key: {fixedKey}\nFixed color: {fixedColor}\nMissing key: {missingKey}\nMissing energy: {missingEnergy}\nNon-M4A skipped for key: {skippedNonM4A}\nMissing files: {missingFile}\nFailed to read tags: {failedToReadTags}\nXML updated in place: {library.Path}");
+            this._library.SaveAs(this._library.Path);
+            this._log.Info($"\nDone!\n" +
+                $"Tracks processed: {allTracks.Count}\n" +
+                $"Fixed key: {fixedKey}\n" +
+                $"Fixed color: {fixedColor}\n" +
+                $"Missing key: {missingKey}\n" +
+                $"Missing energy: {missingEnergy}\n" +
+                $"Non-M4A skipped for key: {skippedNonM4A}\n" +
+                $"Missing files: {missingFile}\n" +
+                $"Failed to read tags: {failedToReadTags}\n" +
+                $"XML updated in place: {this._library.Path}");
         }
         else
         {
-            _log.Info($"\n[WhatIf Complete]\nTracks analyzed: {allTracks.Count}\nWould fix key: {fixedKey}\nWould fix color: {fixedColor}\nMissing key: {missingKey}\nMissing energy: {missingEnergy}\nNon-M4A skipped for key: {skippedNonM4A}\nMissing files: {missingFile}\nFailed to read tags: {failedToReadTags}\nNo XML written.");
+            this._log.Info($"\n[WhatIf Complete]\n" +
+                $"Tracks analyzed: {allTracks.Count}\n" +
+                $"Would fix key: {fixedKey}\n" +
+                $"Would fix color: {fixedColor}\n" +
+                $"Missing key: {missingKey}\n" +
+                $"Missing energy: {missingEnergy}\n" +
+                $"Non-M4A skipped for key: {skippedNonM4A}\n" +
+                $"Missing files: {missingFile}\n" +
+                $"Failed to read tags: {failedToReadTags}\n" +
+                $"No XML written.");
         }
         return Task.CompletedTask;
     }
 
     private static Dictionary<int,string> GetEnergyLevelToColourMapping()
     {
-        string configurationPath = Path.Combine(AppContext.BaseDirectory, "Configuration", Constants.EnergyLevelToColourCodeMappingFileName);
+        string configurationPath = Path.Combine(AppContext.BaseDirectory, Constants.ConfigurationFolderName, Constants.EnergyLevelToColourCodeMappingFileName);
 
         if (!File.Exists(configurationPath))
         {

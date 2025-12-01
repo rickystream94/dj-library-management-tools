@@ -6,14 +6,20 @@ namespace LibTools4DJs.Handlers;
 public sealed class DeleteTracksHandler
 {
     private readonly ILogger _log;
-    public DeleteTracksHandler(ILogger log) => _log = log;
+    private readonly RekordboxXmlLibrary _library;
 
-    public Task RunAsync(RekordboxXmlLibrary library, bool whatIf)
+    public DeleteTracksHandler(RekordboxXmlLibrary library, ILogger log)
     {
-        var deletePlaylistTracks = library.GetTracksToDelete().ToList();
+        this._library = library ?? throw new ArgumentNullException(nameof(library));
+        this._log = log ?? throw new ArgumentNullException(nameof(log));
+    }
+
+    public Task RunAsync(bool whatIf)
+    {
+        var deletePlaylistTracks = this._library.GetTracksToDelete().ToList();
         if (deletePlaylistTracks.Count == 0)
         {
-            _log.Warn("No 'Delete' playlist or no tracks found. Aborting delete operation.");
+            this._log.Warn("No 'Delete' playlist or no tracks found. Aborting delete operation.");
             return Task.CompletedTask;
         }
 
@@ -21,11 +27,11 @@ public sealed class DeleteTracksHandler
             .Select(t => t.GetAttribute(Constants.KeyAttributeName))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .ToHashSet();
-        var tracksToDelete = library.GetCollectionTracks()
+        var tracksToDelete = this._library.GetCollectionTracks()
             .Where(t => trackIdsToDelete.Contains(t.GetAttribute(Constants.TrackIdAttributeName)))
             .ToList();
 
-        _log.Info($"Found {tracksToDelete.Count} tracks to be deleted.");
+        this._log.Info($"Found {tracksToDelete.Count} tracks to be deleted.");
         if (tracksToDelete.Count == 0)
             return Task.CompletedTask;
 
@@ -36,7 +42,7 @@ public sealed class DeleteTracksHandler
             var filePath = RekordboxXmlLibrary.DecodeFileUri(location);
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
-                _log.Warn($"Track file not found: {filePath}");
+                this._log.Warn($"Track file not found: {filePath}");
                 missing++;
                 continue;
             }
@@ -44,24 +50,29 @@ public sealed class DeleteTracksHandler
             var name = Path.GetFileName(filePath);
             if (whatIf)
             {
-                _log.Info($"[WhatIf] Would delete: {name}");
+                this._log.Info($"[WhatIf] Would delete: {name}");
                 continue;
             }
 
             try
             {
                 File.Delete(filePath);
-                _log.Info($"Deleted: {name}");
+                this._log.Info($"Deleted: {name}");
                 deleted++;
             }
             catch (Exception ex)
             {
-                _log.Error($"Failed to delete {name}: {ex.Message}");
+                this._log.Error($"Failed to delete {name}: {ex.Message}");
                 failed++;
             }
         }
 
-        _log.Info($"Summary:\nDeleted: {deleted}\nFailed: {failed}\nMissing: {missing}\nTotal targeted: {tracksToDelete.Count}");
+        this._log.Info($"Summary:\n" +
+            $"Deleted: {deleted}\n" +
+            $"Failed: {failed}\n" +
+            $"Missing: {missing}\n" +
+            $"Total targeted: {tracksToDelete.Count}");
+
         return Task.CompletedTask;
     }
 }

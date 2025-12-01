@@ -10,11 +10,17 @@ namespace LibTools4DJs.Handlers;
 
 public sealed class SyncRekordboxPlaylistsToMikHandler
 {
-    private ILogger _log;
+    private readonly RekordboxXmlLibrary _library;
+    private readonly ILogger _log;
+    private ProgressBar? _progress;
 
-    public SyncRekordboxPlaylistsToMikHandler(ILogger log) => this._log = log;
+    public SyncRekordboxPlaylistsToMikHandler(RekordboxXmlLibrary library, ILogger log)
+    {
+        this._library = library ?? throw new ArgumentNullException(nameof(library));
+        this._log = log ?? throw new ArgumentNullException(nameof(log));
+    }
 
-    public async Task RunAsync(RekordboxXmlLibrary library, string mikDbPath, bool whatIf)
+    public async Task RunAsync(string mikDbPath, bool whatIf, bool resetMikLibrary = false, bool debugEnabled = false)
     {
         if (!File.Exists(mikDbPath))
             throw new FileNotFoundException("MIK database not found", mikDbPath);
@@ -28,7 +34,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
                 var backupDir = Path.Combine(dbDir, Constants.BackupFolderName);
                 Directory.CreateDirectory(backupDir);
 
-                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var timestamp = DateTime.Now.ToString(Constants.DefaultTimestampFormat);
                 var backupFile = Path.Combine(backupDir, $"{Path.GetFileNameWithoutExtension(mikDbPath)}_{timestamp}.db");
                 File.Copy(mikDbPath, backupFile, overwrite: false);
                 this._log.Info($"Backup created: {backupFile}");
@@ -40,22 +46,29 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             }
         }
 
-        var playlistsRoot = library.GetPlaylistsRoot() ?? throw new InvalidOperationException("Root playlist node not found in Rekordbox XML.");
+        var playlistsRoot = this._library.GetPlaylistsRoot() ?? throw new InvalidOperationException("Root playlist node not found in Rekordbox XML.");
 
         if (whatIf)
-            this._log.Info("[WhatIf] Simulating playlist sync. No database changes will be committed.");
+            this._log.Debug("[WhatIf] Simulating playlist sync. No database changes will be committed.");
 
         await using MikDao mikDao = new(mikDbPath);
 
-        var totalTracks = CountTotalPlaylistTracks(playlistsRoot);
-        var progress = new ProgressBar(totalTracks, whatIf ? "Simulating" : "Syncing");
+        // Optional reset: wipe MIK library structure (collections and memberships), preserving system rows
+        if (resetMikLibrary)
+        {
+            await this.ResetMikLibraryAsync(mikDao, whatIf);
+        }
 
-        // Override logger to be progress-aware
-        this._log = new ConsoleLogger(progress);
+        var totalTracks = CountTotalPlaylistTracks(playlistsRoot);
+        if (!debugEnabled)
+        {
+            this._progress = new ProgressBar(totalTracks, whatIf ? "Simulating" : "Syncing");
+            this._log.WithProgressBar(this._progress);
+        }
 
         var stats = new SyncStats();
         using var tx = whatIf ? null : await mikDao.BeginTransactionAsync();
-        await this.TraverseNodeAsync(playlistsRoot, null, mikDao, library, stats, progress, tx, whatIf);
+        await this.TraverseNodeAsync(playlistsRoot, null, mikDao, stats, tx, whatIf);
 
         if (!whatIf)
             tx!.Commit();
@@ -127,14 +140,14 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             collectionId = Guid.NewGuid().ToString();
             if (whatIf)
             {
-                this._log.Info($"[WhatIf] Would create {(collection.IsFolder ? "folder" : "playlist")} '{collection.Name}' (Id={collectionId}, Parent={collection.ParentId})");
+                this._log.Debug($"[WhatIf] Would create {(collection.IsFolder ? "folder" : "playlist")} '{collection.Name}' (Id={collectionId}, Parent={collection.ParentId})");
             }
             else
             {
                 await mikDao.CreateNewCollectionAsync(collection, collectionId, tx);
                 existingCollections.Add(collection, collectionId);
                 stats.NewCollections++;
-                this._log.Info($"Created {(isFolder ? "folder" : "playlist")} '{name}' (Id={collectionId}, Parent={parentId})");
+                this._log.Debug($"Created {(isFolder ? "folder" : "playlist")} '{name}' (Id={collectionId}, Parent={parentId})");
             }
         }
         else
@@ -149,9 +162,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         XmlNode node,
         string? parentId,
         MikDao mikDao,
-        RekordboxXmlLibrary library,
         SyncStats stats,
-        ProgressBar progress,
         SqliteTransaction? tx = null,
         bool whatIf = false)
     {
@@ -171,7 +182,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
 
             if (parentId == null && name.Equals(Constants.RootPlaylistName, StringComparison.OrdinalIgnoreCase))
             {
-                await this.TraverseNodeAsync(el, null, mikDao, library, stats, progress, tx,  whatIf);
+                await this.TraverseNodeAsync(el, null, mikDao, stats, tx,  whatIf);
                 continue;
             }
 
@@ -192,12 +203,12 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             (MikCollection collection, string collectionId) = await this.GetOrCreateCollectionAsync(name, parentId, isFolder, mikDao, stats, tx, whatIf);
             if (isPlaylist)
             {
-                await this.ProcessPlaylistAsync(el, (collection, collectionId), mikDao, library, stats, progress, tx, whatIf);
+                await this.ProcessPlaylistAsync(el, (collection, collectionId), mikDao, stats, tx, whatIf);
             }
 
             if (isFolder)
             {
-                await this.TraverseNodeAsync(el, collectionId, mikDao, library, stats, progress, tx, whatIf);
+                await this.TraverseNodeAsync(el, collectionId, mikDao, stats, tx, whatIf);
             }
         }
     }
@@ -206,32 +217,30 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         XmlElement playlistNode,
         (MikCollection collection, string id) collectionInfo,
         MikDao mikDao,
-        RekordboxXmlLibrary library,
         SyncStats stats,
-        ProgressBar progress,
         SqliteTransaction? tx = null,
         bool whatIf = false)
     {
         // Update progress bar context with current playlist name
-        progress.CurrentItemName = collectionInfo.collection.Name;
+        this._progress?.CurrentItemName = collectionInfo.collection.Name;
 
         int maxExistingSequence = await mikDao.GetMaxSongSequenceInPlaylistAsync(collectionInfo.id);
         var songsInPlaylist = await mikDao.GetSongsInPlaylistAsync(collectionInfo.id);
         var songIdsByPath = await mikDao.SongIdsByPath;
 
-    int sequence = maxExistingSequence + 1;
-    int existingMembershipsSkipped = 0;
-    var batchItems = new List<(string songId, string collectionId, int sequence)>();
+        int sequence = maxExistingSequence + 1;
+        int existingMembershipsSkipped = 0;
+        var membershipsToCreate = new List<MikSongCollectionMembership>();
         foreach (XmlElement trackNode in playlistNode.SelectNodes("TRACK")!)
         {
-            var trackId = trackNode.GetAttribute("Key");
+            var trackId = trackNode.GetAttribute(Constants.KeyAttributeName);
             if (string.IsNullOrWhiteSpace(trackId))
                 continue;
 
-            if (library.GetTrackElementById(trackId) is not XmlElement trackEl)
+            if (this._library.GetTrackElementById(trackId) is not XmlElement trackEl)
                 continue;
 
-            var location = trackEl.GetAttribute("Location");
+            var location = trackEl.GetAttribute(Constants.LocationAttributeName);
             var absPath = RekordboxXmlLibrary.DecodeFileUri(location);
             var normAbs = PathUtils.NormalizePath(absPath);
             if (string.IsNullOrWhiteSpace(normAbs) || !songIdsByPath.TryGetValue(normAbs, out var songId))
@@ -244,34 +253,66 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             if (songsInPlaylist.Contains(songId))
             {
                 existingMembershipsSkipped++;
-                progress.Increment();
+                this._progress?.Increment();
                 continue;
             }
 
             if (whatIf)
             {
-                this._log.Info($"[WhatIf] Would add track SongId={songId} Path='{absPath}' (normalized) to playlist '{collectionInfo.collection.Name}' seq={sequence}");
+                this._log.Debug($"[WhatIf] Would add track SongId={songId} Path='{absPath}' (normalized) to playlist '{collectionInfo.collection.Name}' seq={sequence}");
             }
             else
             {
-                batchItems.Add((songId, collectionInfo.id, sequence));
+                membershipsToCreate.Add(new MikSongCollectionMembership(songId, collectionInfo.id, sequence));
                 songsInPlaylist.Add(songId);
-                this._log.Info($"Queued track SongId={songId} Path='{absPath}' (normalized) for playlist '{collectionInfo.collection.Name}' seq={sequence}");
+                this._log.Debug($"Queued track SongId={songId} Path='{absPath}' (normalized) for playlist '{collectionInfo.collection.Name}' seq={sequence}");
             }
 
             sequence++;
-            progress.Increment();
+            this._progress?.Increment();
         }
 
-        if (!whatIf && batchItems.Count > 0)
+        if (!whatIf && membershipsToCreate.Count > 0)
         {
-            await mikDao.AddSongsToPlaylistBatchAsync(batchItems, tx);
-            stats.MembershipsInserted += batchItems.Count;
-            this._log.Info($"Inserted {batchItems.Count} memberships into playlist '{collectionInfo.collection.Name}'.");
+            await mikDao.AddSongsToPlaylistAsync(membershipsToCreate, tx);
+            stats.MembershipsInserted += membershipsToCreate.Count;
+            this._log.Debug($"Inserted {membershipsToCreate.Count} memberships into playlist '{collectionInfo.collection.Name}'.");
         }
 
         if (existingMembershipsSkipped > 0)
-            this._log.Info($"Playlist '{collectionInfo.collection.Name}': skipped {existingMembershipsSkipped} already existing memberships.");
+            this._log.Debug($"Playlist '{collectionInfo.collection.Name}': skipped {existingMembershipsSkipped} already existing memberships.");
+    }
+
+    private async Task ResetMikLibraryAsync(MikDao mikDao, bool whatIf)
+    {
+        if (whatIf)
+        {
+            this._log.Warn("[WhatIf] Would reset MIK library structure: delete all SongCollectionMembership rows and non-system Collection rows.");
+        }
+        else
+        {
+            // Interactive confirmation for destructive operation
+            this._log.Warn("You are about to RESET the Mixed In Key library structure. This will:\n" +
+                " - Delete ALL rows in SongCollectionMembership\n" +
+                " - Delete ALL rows in Collection except system defaults (Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL)\n\n" +
+                "This cannot be undone.");
+            Console.Write("Type 'RESET' to confirm and proceed: ");
+            var input = Console.ReadLine();
+            if (!string.Equals(input, "RESET", StringComparison.OrdinalIgnoreCase))
+            {
+                this._log.Info("Reset aborted by user. No changes applied.");
+                return;
+            }
+            try
+            {
+                await mikDao.ResetLibraryAsync();
+                this._log.Info("MIK library structure reset completed: memberships cleared and non-system collections removed.", ConsoleColor.Yellow);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException($"Failed to reset MIK library structure. No changes were applied. Details: {ex.Message}", ex);
+            }
+        }
     }
 
     private sealed class SyncStats

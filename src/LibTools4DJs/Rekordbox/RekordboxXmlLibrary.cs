@@ -140,16 +140,18 @@ public sealed class RekordboxXmlLibrary
         this.Document.Save(outputPath);
     }
 
-    // Create a timestamped backup copy of the current XML next to the original, under LibTools4DJs_Backups.
-    // Returns the full path to the created backup file.
+    /// <summary>
+    /// Create a timestamped backup copy of the current XML next to the original, under LibTools4DJs_Backups.
+    /// </summary>
+    /// <returns>The full path to the created backup file.</returns>
     public string CreateBackupCopy()
     {
         var xmlDir = System.IO.Path.GetDirectoryName(this.Path)!;
         var backupDir = System.IO.Path.Combine(xmlDir, Constants.BackupFolderName);
-            Directory.CreateDirectory(backupDir);
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        Directory.CreateDirectory(backupDir);
+        var timestamp = DateTime.Now.ToString(Constants.DefaultTimestampFormat);
         var backupFile = System.IO.Path.Combine(backupDir, System.IO.Path.GetFileName(this.Path) + "." + timestamp + ".bak.xml");
-        System.IO.File.Copy(this.Path, backupFile, overwrite: false);
+        File.Copy(this.Path, backupFile, overwrite: false);
         return backupFile;
     }
 

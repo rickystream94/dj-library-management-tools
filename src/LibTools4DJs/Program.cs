@@ -7,82 +7,79 @@ namespace LibTools4DJs;
 
 internal static class Program
 {
-    private const string DeleteTracksCommand = "delete-tracks";
-    private const string SyncMikToRekordboxCommand = "sync-mik-tags-to-rekordbox";
-    private const string SyncRekordboxPlaylistsToMikCommand = "sync-rekordbox-playlists-to-mik";
-    private const string SyncMikFolderToRekordboxCommand = "sync-mik-folder-to-rekordbox";
-
     private static async Task<int> Main(string[] args)
     {
         // Root command description
         var root = new RootCommand("Library Management Tools for DJs - CLI");
 
+        // Global/logging options
+        var debugOption = new Option<bool>(Constants.DebugOption, () => false, description: "Enable verbose debug logs during execution.");
+        var saveLogsOption = new Option<bool>(Constants.SaveLogsOption, () => false, description: "Persist all logs to LibTools4DJs_Logs/<timestamp>.log in working directory.");
+
         // Shared option
-        var xmlOption = new Option<FileInfo>(name: "--xml", description: "Path to Rekordbox exported collection XML", parseArgument: result =>
-        {
-            var token = result.Tokens.SingleOrDefault()?.Value;
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                result.ErrorMessage = "--xml is required";
-                return null!;
-            }
-            var fi = new FileInfo(token);
-            if (!fi.Exists)
-            {
-                result.ErrorMessage = $"XML file not found: {fi.FullName}";
-            }
-            return fi;
-        }) { IsRequired = true };
+        var xmlOption = GetRekordboxXmlOption();
 
         // delete-tracks command
-        var whatIfOption = new Option<bool>("--what-if", () => false, description: "Simulate command without applying changes (no file deletions or XML modifications)");
-        var deleteCmd = new Command(DeleteTracksCommand, $"Bulk delete tracks marked for deletion, if they're added to the '{Constants.LibraryManagement} > {Constants.DeletePlaylistName}' playlist")
+        var whatIfOption = new Option<bool>(Constants.WhatIfOption, () => false, description: "Simulate command without applying changes (no file deletions or XML modifications)");
+        var deleteCmd = new Command(Constants.DeleteTracksCommand, $"Bulk delete tracks marked for deletion, if they're added to the '{Constants.LibraryManagement} > {Constants.DeletePlaylistName}' playlist")
         {
             xmlOption,
-            whatIfOption
+            whatIfOption,
+            debugOption,
+            saveLogsOption
         };
-        deleteCmd.SetHandler(async (FileInfo xml, bool whatIf) =>
+        deleteCmd.SetHandler(async (FileInfo xml, bool whatIf, bool debug, bool saveLogs) =>
         {
-            var console = new ConsoleLogger();
-            console.PrintCommandInvocation(DeleteTracksCommand,
+            var logPath = saveLogs ? InitLogFile(Constants.DeleteTracksCommand) : null;
+            var console = new ConsoleLogger(debug, logPath);
+            console.PrintCommandInvocation(Constants.DeleteTracksCommand,
                 [
                     (xmlOption.Name, xml.FullName),
-                    (whatIfOption.Name, whatIf)
+                    (whatIfOption.Name, whatIf),
+                    (debugOption.Name, debug),
+                    (saveLogsOption.Name, saveLogs)
                 ]);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
-            var handler = new DeleteTracksHandler(console);
-            await handler.RunAsync(library, whatIf);
-        }, xmlOption, whatIfOption);
+            var handler = new DeleteTracksHandler(library, console);
+            await handler.RunAsync(whatIf);
+            console.Info("Delete command completed.");
+        }, xmlOption, whatIfOption, debugOption, saveLogsOption);
 
         // sync-mik-tags-to-rekordbox command
-        var syncCmd = new Command(SyncMikToRekordboxCommand, "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
+        var syncCmd = new Command(Constants.SyncMikTagsToRekordboxCommand, "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
         {
             xmlOption,
-            whatIfOption
+            whatIfOption,
+            debugOption,
+            saveLogsOption
         };
-        syncCmd.SetHandler(async (FileInfo xml, bool whatIf) =>
+        syncCmd.SetHandler(async (FileInfo xml, bool whatIf, bool debug, bool saveLogs) =>
         {
-            var console = new ConsoleLogger();
-            console.PrintCommandInvocation(SyncMikToRekordboxCommand,
+            var logPath = saveLogs ? InitLogFile(Constants.SyncMikTagsToRekordboxCommand) : null;
+            var console = new ConsoleLogger(debug, logPath);
+            console.PrintCommandInvocation(Constants.SyncMikTagsToRekordboxCommand,
                 [
                     (xmlOption.Name, xml.FullName),
-                    (whatIfOption.Name, whatIf)
+                    (whatIfOption.Name, whatIf),
+                    (debugOption.Name, debug),
+                    (saveLogsOption.Name, saveLogs)
                 ]);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
-            var handler = new SyncMikTagsToRekordboxHandler(console);
-            await handler.RunAsync(library, whatIf);
-        }, xmlOption, whatIfOption);
+            var handler = new SyncMikTagsToRekordboxHandler(library, console);
+            await handler.RunAsync(whatIf, debug);
+            console.Info("Sync MIK tags command completed.");
+        }, xmlOption, whatIfOption, debugOption, saveLogsOption);
 
-        // sync-rekordbox-playlists-to-mik command
+        // sync-rekordbox-library-to-mik command
         var mikVersionOption = new Option<string>(
-            name: "--mik-version",
-            getDefaultValue: () => "11.0",
-            description: "Mixed In Key version (e.g., 11.0). Defaults to 11.0.");
+            name: Constants.MikVersionOption,
+            getDefaultValue: () => Constants.MikDefaultVersion,
+            description: $"Mixed In Key version (e.g., {Constants.MikDefaultVersion}).");
 
         // --mik-db becomes optional; if omitted, we auto-resolve from USERPROFILE + version
         var mikDbOption = new Option<FileInfo?>(
-            name: "--mik-db",
-            description: "Path to Mixed In Key SQLite database (MIKStore.db). Optional; if omitted, the path will be auto-resolved from USERPROFILE and --mik-version.",
+            name: Constants.MikDbOption,
+            description: $"Path to Mixed In Key SQLite database ({Constants.MikDatabaseFileName}). Optional; if omitted, the path will be auto-resolved from USERPROFILE and {Constants.MikVersionOption}.",
             parseArgument: result =>
             {
                 var token = result.Tokens.SingleOrDefault()?.Value;
@@ -100,53 +97,65 @@ internal static class Program
             })
         { IsRequired = false };
 
-        var syncPlaylistsCmd = new Command(SyncRekordboxPlaylistsToMikCommand, "Replicate Rekordbox playlist/folder hierarchy into Mixed In Key database (no deletion of existing).")
+        var resetMikLibraryOption = new Option<bool>(Constants.ResetMikLibraryOption, () => false, description: "Before syncing, wipe MIK collections and memberships (preserving system rows: Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL). Use with caution.");
+
+        var syncRekordboxLibraryToMikCmd = new Command(Constants.SyncRekordboxLibraryToMikCommand, "Replicate Rekordbox playlist/folder hierarchy into Mixed In Key database (additive). Optionally reset MIK library before syncing.")
         {
             xmlOption,
             mikDbOption,
             mikVersionOption,
-            whatIfOption
+            resetMikLibraryOption,
+            whatIfOption,
+            debugOption,
+            saveLogsOption
         };
-        syncPlaylistsCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, bool whatIf) =>
+        syncRekordboxLibraryToMikCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, bool whatIf, bool resetMikLibrary, bool debug, bool saveLogs) =>
         {
-            await HandleMikCommandAsync(SyncRekordboxPlaylistsToMikCommand, xml, mikDb, mikVersion, whatIf,
-                (console, library, mikPath, dryRun) => new SyncRekordboxPlaylistsToMikHandler(console).RunAsync(library, mikPath, dryRun));
-        }, xmlOption, mikDbOption, mikVersionOption, whatIfOption);
+            await HandleMikCommandAsync(Constants.SyncRekordboxLibraryToMikCommand, xml, mikDb, mikVersion, whatIf,
+                (console, library, mikPath, dryRun) => new SyncRekordboxPlaylistsToMikHandler(library, console).RunAsync(mikPath, dryRun, resetMikLibrary, debug),
+                extraParams: new[] { (resetMikLibraryOption.Name, (object?)resetMikLibrary), (debugOption.Name, (object?)debug), (saveLogsOption.Name, (object?)saveLogs) },
+                debugEnabled: debug,
+                saveLogs: saveLogs);
+        }, xmlOption, mikDbOption, mikVersionOption, whatIfOption, resetMikLibraryOption, debugOption, saveLogsOption);
 
         // sync-mik-folder-to-rekordbox command
         var mikFolderNameOption = new Option<string>(
-            name: "--mik-folder",
+            name: Constants.MikFolderOption,
             description: $"Name of the Mixed In Key folder to mirror into Rekordbox XML under {Constants.SyncFromMikFolderName}",
             parseArgument: result =>
             {
                 var token = result.Tokens.SingleOrDefault()?.Value;
                 if (string.IsNullOrWhiteSpace(token))
                 {
-                    result.ErrorMessage = "--mik-folder is required";
+                    result.ErrorMessage = $"{Constants.MikFolderOption} is required";
                     return null!;
                 }
                 return token;
             }) { IsRequired = true };
 
-        var syncMikFolderCmd = new Command(SyncMikFolderToRekordboxCommand, "Mirror a Mixed In Key folder hierarchy back into Rekordbox XML under a dedicated folder; idempotent and supports --what-if.")
+        var syncMikFolderToRekordboxCmd = new Command(Constants.SyncMikFolderToRekordboxCommand, $"Mirror a Mixed In Key folder hierarchy back into Rekordbox XML under a dedicated folder; idempotent and supports {Constants.WhatIfOption}.")
         {
             xmlOption,
             mikDbOption,
             mikVersionOption,
             mikFolderNameOption,
-            whatIfOption
+            whatIfOption,
+            debugOption,
+            saveLogsOption
         };
-        syncMikFolderCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, string mikFolder, bool whatIf) =>
+        syncMikFolderToRekordboxCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, string mikFolder, bool whatIf, bool debug, bool saveLogs) =>
         {
-            await HandleMikCommandAsync(SyncMikFolderToRekordboxCommand, xml, mikDb, mikVersion, whatIf,
-                (console, library, mikPath, dryRun) => new SyncMikFolderToRekordboxHandler(console).RunAsync(library, mikPath, mikFolder, dryRun),
-                extraParams: new[] { (mikFolderNameOption.Name, (object?)mikFolder) });
-        }, xmlOption, mikDbOption, mikVersionOption, mikFolderNameOption, whatIfOption);
+            await HandleMikCommandAsync(Constants.SyncMikFolderToRekordboxCommand, xml, mikDb, mikVersion, whatIf,
+                (console, library, mikPath, dryRun) => new SyncMikFolderToRekordboxHandler(library, console).RunAsync(mikPath, mikFolder, dryRun, debug),
+                extraParams: new[] { (mikFolderNameOption.Name, (object?)mikFolder), (debugOption.Name, (object?)debug), (saveLogsOption.Name, (object?)saveLogs) },
+                debugEnabled: debug,
+                saveLogs: saveLogs);
+        }, xmlOption, mikDbOption, mikVersionOption, mikFolderNameOption, whatIfOption, debugOption, saveLogsOption);
 
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);
-        root.AddCommand(syncPlaylistsCmd);
-        root.AddCommand(syncMikFolderCmd);
+        root.AddCommand(syncRekordboxLibraryToMikCmd);
+        root.AddCommand(syncMikFolderToRekordboxCmd);
 
         return await root.InvokeAsync(args);
     }
@@ -156,23 +165,24 @@ internal static class Program
         if (mikDb is not null)
             return mikDb.FullName;
 
-        var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var userProfile = Environment.GetEnvironmentVariable(Constants.UserProfileVariableName);
         if (string.IsNullOrWhiteSpace(userProfile))
         {
-            log.Error("USERPROFILE environment variable is not set. Cannot auto-resolve MIK database path.");
+            log.Error($"{Constants.UserProfileVariableName} environment variable is not set. Cannot auto-resolve MIK database path.");
             return null;
         }
+
         var resolved = Path.Combine(
             userProfile,
-            "AppData",
-            "Local",
-            "Mixed In Key",
-            "Mixed In Key",
+            Constants.AppDataFolderName,
+            Constants.LocalAppDataFolderName,
+            Constants.MikFolderName,
+            Constants.MikFolderName,
             mikVersion,
-            "MIKStore.db");
+            Constants.MikDatabaseFileName);
         if (!File.Exists(resolved))
         {
-            log.Error($"Auto-resolved MIK database file not found: {resolved}. Provide --mik-db explicitly or adjust --mik-version.");
+            log.Error($"Auto-resolved MIK database file not found: {resolved}. Provide {Constants.MikDbOption} explicitly or adjust {Constants.MikVersionOption}.");
             return null;
         }
         return resolved;
@@ -183,6 +193,15 @@ internal static class Program
         log.PrintCommandInvocation(command, args);
     }
 
+    private static string InitLogFile(string commandName)
+    {
+        var ts = DateTime.Now.ToString(Constants.DefaultTimestampFormat);
+        var dir = Path.Combine(Environment.CurrentDirectory, Constants.LogsFolderName);
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"{commandName}_{ts}.log");
+        return path;
+    }
+
     private static async Task HandleMikCommandAsync(
         string commandName,
         FileInfo xml,
@@ -190,18 +209,21 @@ internal static class Program
         string mikVersion,
         bool whatIf,
         Func<ConsoleLogger, RekordboxXmlLibrary, string, bool, Task> handlerInvoker,
-        (string Name, object? Value)[]? extraParams = null)
+        (string Name, object? Value)[]? extraParams = null,
+        bool debugEnabled = false,
+        bool saveLogs = false)
     {
-        var console = new ConsoleLogger();
+        var logPath = saveLogs ? InitLogFile(commandName) : null;
+        var console = new ConsoleLogger(debugEnabled, logPath);
         var resolvedMikDbPath = ResolveMikDbPath(console, mikDb, mikVersion);
         if (resolvedMikDbPath is null) return;
 
         var paramList = new List<(string Name, object? Value)>
         {
-            ("--xml", xml.FullName),
-            ("--mik-db", resolvedMikDbPath),
-            ("--mik-version", mikVersion),
-            ("--what-if", whatIf)
+            (Constants.RekordboxXmlOption, xml.FullName),
+            (Constants.MikDbOption, resolvedMikDbPath),
+            (Constants.MikVersionOption, mikVersion),
+            (Constants.WhatIfOption, whatIf)
         };
         if (extraParams is not null)
             paramList.AddRange(extraParams);
@@ -210,5 +232,26 @@ internal static class Program
 
         var library = RekordboxXmlLibrary.Load(xml.FullName);
         await handlerInvoker(console, library, resolvedMikDbPath, whatIf);
+        console.Info($"{commandName} command completed.");
+    }
+
+    private static Option<FileInfo> GetRekordboxXmlOption()
+    {
+        return new Option<FileInfo>(name: "--xml", description: "Path to Rekordbox exported collection XML", parseArgument: result =>
+        {
+            var token = result.Tokens.SingleOrDefault()?.Value;
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                result.ErrorMessage = "--xml is required";
+                return null!;
+            }
+            var fi = new FileInfo(token);
+            if (!fi.Exists)
+            {
+                result.ErrorMessage = $"XML file not found: {fi.FullName}";
+            }
+            return fi;
+        })
+        { IsRequired = true };
     }
 }

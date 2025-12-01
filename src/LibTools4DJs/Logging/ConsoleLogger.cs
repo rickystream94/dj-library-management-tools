@@ -2,26 +2,51 @@ namespace LibTools4DJs.Logging;
 
 public sealed class ConsoleLogger : ILogger
 {
-    private readonly ProgressBar? _progress;
+    private readonly bool _debugEnabled;
+    private readonly string? _logFilePath;
+    private ProgressBar? _progress;
 
-    public ConsoleLogger(ProgressBar? progressBar = null) => this._progress = progressBar;
+    public ConsoleLogger(bool debugEnabled = false, string? logFilePath = null)
+    {
+        this._debugEnabled = debugEnabled;
+        this._logFilePath = logFilePath;
+    }
+
+    public void WithProgressBar(ProgressBar progressBar)
+    {
+        this._progress = progressBar;
+    }
 
     public void Info(string message, ConsoleColor? consoleColor = null)
     {
-        Log(message, consoleColor);
+        this.Log(message, consoleColor);
         this._progress?.Render();
     }
 
     public void Warn(string message)
     {
-        Log(message, ConsoleColor.Yellow);
+        this.Log(message, ConsoleColor.Yellow);
         this._progress?.Render();
     }
 
     public void Error(string message)
     {
-        Log(message, ConsoleColor.Red);
+        this.Log(message, ConsoleColor.Red);
         this._progress?.Render();
+    }
+
+    public void Debug(string message)
+    {
+        if (this._debugEnabled)
+        {
+            this.Log(message, ConsoleColor.DarkGray);
+            this._progress?.Render();
+        }
+        else
+        {
+            // Still persist to file if enabled, but do not print to console
+            this.PersistToFile(message);
+        }
     }
 
     // Pretty print a command invocation with its parameter names and values in cyan.
@@ -33,7 +58,7 @@ public sealed class ConsoleLogger : ILogger
         const int padding = 2;
         var paramList = parameters.ToList();
         int nameColWidth = Math.Max("Parameter".Length, paramList.Count == 0 ? 8 : paramList.Max(p => p.Name.Length));
-        
+
         // Build lines
         var header = $"Command: {commandName}";
         var lines = new List<string> { header };
@@ -63,13 +88,14 @@ public sealed class ConsoleLogger : ILogger
             var content = l.Length > maxWidth - (padding * 2) ? l.Substring(0, maxWidth - (padding * 2) - 1) + '…' : l;
             Console.WriteLine("│" + new string(' ', padding) + content.PadRight(maxWidth - (padding * 2)) + "│");
         }
-        
+
         Console.WriteLine(Bar('└', '─', '┘'));
         Console.ForegroundColor = prev;
         this._progress?.Render();
+        this.PersistToFile(string.Join(Environment.NewLine, lines));
     }
 
-    private static void Log(string message, ConsoleColor? consoleColor = null)
+    private void Log(string message, ConsoleColor? consoleColor = null)
     {
         if (consoleColor.HasValue)
         {
@@ -77,9 +103,25 @@ public sealed class ConsoleLogger : ILogger
             Console.ForegroundColor = consoleColor.Value;
             Console.WriteLine(message);
             Console.ForegroundColor = prev;
+            this.PersistToFile(message);
             return;
         }
 
         Console.WriteLine(message);
+        this.PersistToFile(message);
+    }
+
+    private void PersistToFile(string message)
+    {
+        if (string.IsNullOrWhiteSpace(this._logFilePath))
+            return;
+        try
+        {
+            File.AppendAllText(this._logFilePath!, message + Environment.NewLine);
+        }
+        catch
+        {
+            // swallow file I/O errors to avoid breaking command execution
+        }
     }
 }

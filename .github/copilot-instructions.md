@@ -6,7 +6,7 @@ Purpose: C#/.NET console utilities to bridge gaps between Rekordbox and Mixed In
 Located in `src/LibTools4DJs/`. Entry point `Program.cs` uses `System.CommandLine` to wire commands:
 1. `delete-tracks` → `DeleteTracksHandler`
 2. `sync-mik-tags-to-rekordbox` → `SyncMikTagsToRekordboxHandler`
-3. `sync-rekordbox-playlists-to-mik` → `SyncRekordboxPlaylistsToMikHandler`
+3. `sync-rekordbox-library-to-mik` → `SyncRekordboxPlaylistsToMikHandler`
 4. `sync-mik-folder-to-rekordbox` → `SyncMikFolderToRekordboxHandler`
 
 Library XML abstraction: `RekordboxXmlLibrary` wraps `XmlDocument` providing helpers:
@@ -43,7 +43,7 @@ Prereq: .NET 8/10 SDK (solution: `LibTools4DJs.sln`). Build: `dotnet build LibTo
 ```powershell
 dotnet run --project src/LibTools4DJs -- delete-tracks --xml D:\RekordboxExports\rekordbox.xml --what-if
 dotnet run --project src/LibTools4DJs -- sync-mik-tags-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml
-dotnet run --project src/LibTools4DJs -- sync-rekordbox-playlists-to-mik --xml D:\RekordboxExports\rekordbox.xml --what-if
+dotnet run --project src/LibTools4DJs -- sync-rekordbox-library-to-mik --xml D:\RekordboxExports\rekordbox.xml --what-if
 dotnet run --project src/LibTools4DJs -- sync-mik-folder-to-rekordbox --xml D:\RekordboxExports\rekordbox.xml --mik-folder "My DJ Prep" --what-if
 ```
 Auto-resolve MIK DB path: `$env:USERPROFILE\AppData\Local\Mixed In Key\Mixed In Key\<version>\MIKStore.db` unless `--mik-db` supplied.

@@ -8,7 +8,7 @@ namespace LibTools4DJs.MixedInKey
     {
         private readonly string mikDbPath;
         private readonly Lazy<Task<SqliteConnection>> connectionLazy;
-        private readonly Lazy<Task<Dictionary<MikCollection, string>>> existingCollectionsLazy;
+        private Lazy<Task<Dictionary<MikCollection, string>>> existingCollectionsLazy;
         private readonly Lazy<Task<Dictionary<string, string>>> songIdsByPathLazy;
 
         public MikDao(string mikDbPath)
@@ -66,25 +66,59 @@ namespace LibTools4DJs.MixedInKey
             return set;
         }
 
-        public async Task AddSongToPlaylistAsync(string songId, string collectionId, int sequence, SqliteTransaction? tx = null)
+        public async Task AddSongsToPlaylistAsync(IEnumerable<MikSongCollectionMembership> memberships, SqliteTransaction? tx = null)
         {
-            using var cmd = (await this.Connection).CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = @"INSERT INTO SongCollectionMembership (Id, SongId, CollectionId, Sequence)
+            foreach (var membership in memberships)
+            {
+                using var cmd = (await this.Connection).CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = @"INSERT INTO SongCollectionMembership (Id, SongId, CollectionId, Sequence)
                                     VALUES ($id, $songId, $collectionId, $seq)";
-            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
-            cmd.Parameters.AddWithValue("$songId", songId);
-            cmd.Parameters.AddWithValue("$collectionId", collectionId);
-            cmd.Parameters.AddWithValue("$seq", sequence);
-            await cmd.ExecuteNonQueryAsync();
+                cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+                cmd.Parameters.AddWithValue("$songId", membership.SongId);
+                cmd.Parameters.AddWithValue("$collectionId", membership.CollectionId);
+                cmd.Parameters.AddWithValue("$seq", membership.Sequence);
+                await cmd.ExecuteNonQueryAsync();
+            }
         }
 
-        public async Task AddSongsToPlaylistBatchAsync(IEnumerable<(string songId, string collectionId, int sequence)> items, SqliteTransaction? tx = null)
+        /// <summary>
+        /// Wipes library structure: deletes all rows in SongCollectionMembership and deletes all collections
+        /// except system defaults (Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL). Executes within a transaction.
+        /// </summary>
+        public async Task ResetLibraryAsync()
         {
-            foreach (var (songId, collectionId, sequence) in items)
+            var conn = await this.Connection;
+            using var tx = conn.BeginTransaction();
+            try
             {
-                await AddSongToPlaylistAsync(songId, collectionId, sequence, tx);
+                // Delete memberships first
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "DELETE FROM SongCollectionMembership";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // Delete non-system collections
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "DELETE FROM Collection WHERE NOT (Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL)";
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                tx.Commit();
             }
+            catch
+            {
+                tx.Rollback();
+                throw;
+            }
+
+            // Invalidate caches so subsequent calls rebuild from fresh state
+            // Force re-load next time by creating new lazy
+            this.existingCollectionsLazy = new Lazy<Task<Dictionary<MikCollection, string>>>(this.GetExistingCollectionsAsync);
         }
 
         public async Task<SqliteTransaction> BeginTransactionAsync()
@@ -101,13 +135,6 @@ namespace LibTools4DJs.MixedInKey
                 await connection.CloseAsync();
                 await connection.DisposeAsync();
             }
-        }
-
-        private async Task<SqliteConnection> InitializeConnectionAsync()
-        {
-            var connection = new SqliteConnection($"Data Source={this.mikDbPath}");
-            await connection.OpenAsync();
-            return connection;
         }
 
         // New helper: get root folder id by name
@@ -166,6 +193,13 @@ namespace LibTools4DJs.MixedInKey
                 files.Add(file);
             }
             return files;
+        }
+
+        private async Task<SqliteConnection> InitializeConnectionAsync()
+        {
+            var connection = new SqliteConnection($"Data Source={this.mikDbPath}");
+            await connection.OpenAsync();
+            return connection;
         }
 
         private async Task<Dictionary<MikCollection, string>> GetExistingCollectionsAsync()
