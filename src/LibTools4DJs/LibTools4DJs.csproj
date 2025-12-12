@@ -18,6 +18,7 @@
     <RepositoryUrl>https://github.com/rickystream94/dj-library-management-tools</RepositoryUrl>
     <PackageProjectUrl>https://github.com/rickystream94/dj-library-management-tools</PackageProjectUrl>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
@@ -30,5 +31,6 @@
     </Content>
     <!-- Include README in NuGet package -->
     <None Include="..\..\readme.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>
