@@ -87,7 +87,7 @@ This requires the .NET runtime (not necessarily the full SDK). If the runtime is
 ### Self-contained binaries (no .NET required)
 
 - Download the zip for your OS/arch from the GitHub Release (e.g., `LibTools4DJs-win-x64.zip`, `LibTools4DJs-linux-x64.zip`, `LibTools4DJs-osx-arm64.zip`).
-- Extract and run the executable (`djtools.exe` on Windows, `djtools` on macOS/Linux). Optionally add the folder to your `PATH`.
+- Extract and run the executable (`LibTools4DJs.exe` on Windows, `LibTools4DJs` on macOS/Linux). Optionally add the folder to your `PATH`.
 
 These are single-file executables that bundle the runtime.
 
