@@ -1,0 +1,117 @@
+name: Release Self-Contained Binaries
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [win-x64, osx-x64, osx-arm64, linux-x64, linux-arm64]
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore
+      - name: Publish self-contained single file
+        run: |
+          dotnet publish src/LibTools4DJs/LibTools4DJs.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained true \
+            /p:PublishSingleFile=true \
+            /p:PublishReadyToRun=true \
+            -o ./publish/${{ matrix.rid }}
+      - name: Archive executable
+        run: |
+          cd publish/${{ matrix.rid }}
+          zip -r ../../LibTools4DJs-${{ env.TAG_NAME }}-${{ matrix.rid }}.zip .
+      - name: Upload build artifact (zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: libtools4djs-${{ env.TAG_NAME }}-${{ matrix.rid }}-zip
+          path: LibTools4DJs-${{ env.TAG_NAME }}-${{ matrix.rid }}.zip
+
+  checksums-and-sign:
+    needs: build-matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect zipped binaries
+        run: |
+          mkdir -p dist
+          find artifacts -type f -name "LibTools4DJs-${TAG_NAME}-*.zip" -exec cp {} dist/ \;
+          if [ "$(ls -1 dist | wc -l)" = "0" ]; then
+            echo "No zipped binaries found in artifacts; aborting checksums generation." && exit 1
+          fi
+      - name: Generate SHA256SUMS
+        if: success()
+        run: |
+          cd dist
+          sha256sum *.zip > SHA256SUMS
+      - name: Import GPG private key
+        if: success()
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "GPG_PRIVATE_KEY secret not set; skipping signing." && exit 0
+          fi
+          echo "$GPG_PRIVATE_KEY" | base64 -d > private.key
+          gpg --batch --import private.key
+          # Optional: list keys to confirm import
+          gpg --list-secret-keys || true
+      - name: Sign SHA256SUMS (detached signature)
+        if: success()
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          cd dist
+          if [ ! -f SHA256SUMS ]; then
+            echo "SHA256SUMS not found; nothing to sign." && exit 0
+          fi
+          if [ -z "$GPG_PASSPHRASE" ]; then
+            echo "GPG_PASSPHRASE not set; creating unsigned checksums only." && exit 0
+          fi
+          # Use passphrase non-interactively
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --armor --detach-sign --output SHA256SUMS.sig SHA256SUMS
+      - name: Upload checksums to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: LibTools4DJs-${{ env.TAG_NAME }}
+          files: |
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload zipped binaries to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: LibTools4DJs-${{ env.TAG_NAME }}
+          files: |
+            dist/LibTools4DJs-${{ env.TAG_NAME }}-win-x64.zip
+            dist/LibTools4DJs-${{ env.TAG_NAME }}-osx-x64.zip
+            dist/LibTools4DJs-${{ env.TAG_NAME }}-osx-arm64.zip
+            dist/LibTools4DJs-${{ env.TAG_NAME }}-linux-x64.zip
+            dist/LibTools4DJs-${{ env.TAG_NAME }}-linux-arm64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

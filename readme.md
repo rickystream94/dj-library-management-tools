@@ -8,6 +8,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 1. [Notes](#notes)
 1. [Build status](#build-status)
 1. [Prerequisites](#prerequisites)
+1. [Installation](#installation)
 1. [Quick Start](#quick-start)
 	- [`delete-tracks`](#delete-tracks)
 	- [`sync-mik-tags-to-rekordbox`](#sync-mik-tags-to-rekordbox)
@@ -17,6 +18,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 1. [Motivation & Problems Addressed](#motivation--problems-addressed)
 1. [Default Energy → Colour Mapping](#default-energy--colour-mapping)
 1. [Troubleshooting](#troubleshooting)
+1. [Verify Downloads](#verify-downloads)
 
 ## Features & Commands Summary
 
@@ -44,23 +46,78 @@ Console utilities to help DJs with advanced library management tasks involving [
 ---
 
 ## Prerequisites
-- .NET 10 SDK
+- .NET Runtime (if you install the tool with `dotnet tool`)
 - Rekordbox v7.x with your music collection.
 - Mixed In Key, setup to write key & energy level _before_ the Comment tag (e.g. `1A - Energy 6 ...`), and with your music library already analyzed.
 
 ---
 
+## Installation
+
+You can install and use the tool in two ways:
+
+### .NET Global Tool (recommended if you have the .NET runtime)
+
+- Install globally:
+
+	```pwsh
+	dotnet tool install -g LibTools4DJs
+	```
+
+- Update:
+
+	```pwsh
+	dotnet tool update -g LibTools4DJs
+	```
+
+- Uninstall:
+
+	```pwsh
+	dotnet tool uninstall -g LibTools4DJs
+	```
+
+- Run:
+
+	```pwsh
+	djtools --help
+	```
+
+This requires the .NET runtime (not necessarily the full SDK). If the runtime is missing, install the latest .NET runtime from Microsoft.
+
+### Self-contained binaries (no .NET required)
+
+- Download the zip for your OS/arch from the GitHub Release (e.g., `LibTools4DJs-win-x64.zip`, `LibTools4DJs-linux-x64.zip`, `LibTools4DJs-osx-arm64.zip`).
+- Extract and run the executable (`djtools.exe` on Windows, `djtools` on macOS/Linux). Optionally add the folder to your `PATH`.
+
+These are single-file executables that bundle the runtime.
+
+### Build from source
+
+1. Clone repo: `git clone https://github.com/rickystream94/dj-library-management-tools.git`
+1. `cd dj-library-management-tools`
+1. Build: `dotnet build .\LibTools4DJs.sln -c Release`.
+1. Find the generated `LibTools4DJs.exe` under the `bin` folder.
+1. For all the commands listed in this readme, replace `djtools` with the path to the `LibTools4DJs.exe` file.
+
+### Important note on code signing
+
+Commits and tags in this repository are GPG‑signed to prove authorship and integrity of the source. My public key is available at: https://github.com/rickystream94.gpg
+
+Binaries distributed via GitHub Releases are not platform‑signed (no Windows Authenticode certificate, no Apple notarization). As a result:
+
+- Windows SmartScreen may warn when you run `djtools.exe` the first time.
+- macOS Gatekeeper may require you to explicitly allow running the app.
+
+This is expected and acceptable for this open‑source project. If you prefer, build from source or verify downloads via checksums/signatures when provided.
+
+---
+
 ## Quick Start
-> ❕Currently, only building the project from source is available. Support for running a packaged version of the tool will come soon.
 
 ### Common Prep
 1. The tool expects a folder at the root of the Rekordbox playlists tree named `LIBRARY MANAGEMENT`.
 1. If you want to run the `delete-tracks` command, create a playlist named `Delete` under the `LIBRARY MANAGEMENT` folder. Add manually the tracks to be deleted to such playlist, or you can create it as an intelligent playlist and use rules based on tags (e.g.  `My Tag contains Delete`).
 1. Export the collection in XML format (`File > Export Collection in XML Format`) e.g. `D:\RekordboxExports\rekordbox.xml`.
-1. Clone repo: `git clone https://github.com/rickystream94/dj-library-management-tools.git`
-1. `cd dj-library-management-tools`
-1. Build: `dotnet build .\LibTools4DJs.sln -c Release`.
-1. Find the generated `LibTools4DJs.exe` under the `bin` folder.
 
 ### After execution of sync commands
 1. Rekordbox XML is updated in place; a backup copy is stored under `LibTools4DJs_Backups` (same directory as original XML).
@@ -76,7 +133,7 @@ Console utilities to help DJs with advanced library management tasks involving [
 Bulk removes audio files from disk and their corresponding track entries from the Rekordbox collection. The set of tracks to delete is defined by placing them in (or matching rules for) the `LIBRARY MANAGEMENT/Delete` playlist. Use `--what-if` first to review what would be deleted without performing irreversible operations.
 
 ```powershell
-LibTools4DJs.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
+djtools delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
 ```
 
 ### `sync-mik-tags-to-rekordbox`
@@ -84,7 +141,7 @@ LibTools4DJs.exe delete-tracks --xml "D:\RekordboxExports\rekordbox.xml" [--what
 Reads each track's tags (via Mixed In Key pre-written comments) to update the musical key for M4A tracks and assign a colour based on MIK energy level. Produces analysis playlists (`MIK Key Analysis`, `MIK Energy Level Analysis`) listing only the modified tracks so you can easily re-import them into Rekordbox.
 
 ```powershell
-LibTools4DJs.exe sync-mik-tags-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
+djtools sync-mik-tags-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" [--what-if]
 ```
 
 ### `sync-rekordbox-library-to-mik`
@@ -98,7 +155,7 @@ The default version is **11.0**, but it can be overridden with the `--mik-versio
 
 Usage:
 ```powershell
-LibTools4DJs.exe sync-rekordbox-library-to-mik --xml "D:\RekordboxExports\rekordbox.xml" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"] [--reset-mik-library] [--debug] [--save-logs]
+djtools sync-rekordbox-library-to-mik --xml "D:\RekordboxExports\rekordbox.xml" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"] [--reset-mik-library] [--debug] [--save-logs]
 ```
 When `--reset-mik-library` is used, the tool deletes all rows in `SongCollectionMembership` and all rows in `Collection` except the default system ones identified by `Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL`. Runs within a transaction; skipped in `--what-if`.
 
@@ -111,7 +168,7 @@ MIK DB path resolution follows the same rules as the other MIK command (auto-res
 
 Usage:
 ```powershell
-LibTools4DJs.exe sync-mik-folder-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" --mik-folder "My DJ Prep" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"]
+djtools sync-mik-folder-to-rekordbox --xml "D:\RekordboxExports\rekordbox.xml" --mik-folder "My DJ Prep" [--what-if] [--mik-version "<MIK-version>"] [--mik-db "/path/to/MIKStore.db"]
 ```
 Output summary includes an ASCII tree of folders/playlists with counts of tracks added.
 
@@ -125,7 +182,7 @@ All commands accept two optional logging flags:
 
 Example with both:
 ```powershell
-LibTools4DJs.exe sync-rekordbox-library-to-mik --xml "D:\RekordboxExports\rekordbox.xml" --debug --save-logs
+djtools sync-rekordbox-library-to-mik --xml "D:\RekordboxExports\rekordbox.xml" --debug --save-logs
 ```
 
 ---
@@ -180,3 +237,40 @@ Only a limited palette renders distinctly in Rekordbox; adjust responsibly.
 
 If an issue is not listed, inspect console warnings and errors; they are designed to be explicit. Feel free to open an issue with command output and environment details.
 
+---
+
+## Verify Downloads
+
+You can verify the integrity and authenticity of release downloads:
+
+1. Import the public key (one-time)
+
+	- The public key is available at: https://github.com/rickystream94.gpg
+	- Import into GPG:
+
+		```bash
+		gpg --import rickystream94_pubkey.asc
+		```
+
+1. Download files from the Release assets
+
+	- The archive for your platform (e.g., `LibTools4DJs-win-x64.zip`)
+	- The checksum file `SHA256SUMS`
+	- The signature file `SHA256SUMS.sig`
+
+1. Verify checksums and signature
+
+	- Windows (PowerShell):
+
+		```pwsh
+		gpg --verify .\SHA256SUMS.sig .\SHA256SUMS
+		```
+
+	- macOS/Linux:
+
+		```bash
+		sha256sum -c SHA256SUMS   # Use 'shasum -a 256 -c SHA256SUMS' on macOS if sha256sum isn't available
+		gpg --verify SHA256SUMS.sig SHA256SUMS
+		```
+
+If verification succeeds, the archives you downloaded match the published checksums and were signed by the expected key.

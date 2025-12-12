@@ -9,6 +9,15 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Description>CLI utilities to improve integration between Rekordbox and Mixed In Key.</Description>
     <Platforms>x64</Platforms>
+    <!-- .NET Global Tool packaging -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>djtools</ToolCommandName>
+    <PackageId>LibTools4DJs</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Riccardo Cannistrà</Authors>
+    <RepositoryUrl>https://github.com/rickystream94/dj-library-management-tools</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/rickystream94/dj-library-management-tools</PackageProjectUrl>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
@@ -19,5 +28,7 @@
     <Content Include="Configuration\EnergyLevelToColorCode.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <!-- Include README in NuGet package -->
+    <None Include="..\..\readme.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>
