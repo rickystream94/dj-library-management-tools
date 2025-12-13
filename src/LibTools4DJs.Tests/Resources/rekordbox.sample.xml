@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DJ_PLAYLISTS Version="1.0.0">
+  <PRODUCT Name="rekordbox" Version="7.2.8" Company="AlphaTheta"/>
+  <COLLECTION Entries="20">
+    <!-- Minimal but realistic collection: 20 tracks with mixed formats and tonality -->
+    <TRACK TrackID="1"  Name="Skyline"           Location="file://localhost/C:/Music/Tests/Skyline.m4a"           Kind="M4A File" Tonality="8A" />
+    <TRACK TrackID="2"  Name="Midnight"          Location="file://localhost/C:/Music/Tests/Midnight.mp3"          Kind="MP3 File" Tonality="5A" />
+    <TRACK TrackID="3"  Name="Neon Lights"       Location="file://localhost/C:/Music/Tests/Neon_Lights.wav"      Kind="WAV File" Tonality="2B" />
+    <TRACK TrackID="4"  Name="Echoes"            Location="file://localhost/C:/Music/Tests/Echoes.aiff"          Kind="AIFF File" Tonality="7A" />
+    <TRACK TrackID="5"  Name="Crystal"           Location="file://localhost/C:/Music/Tests/Crystal.m4a"          Kind="M4A File" Tonality="11B" />
+    <TRACK TrackID="6"  Name="Pulse"             Location="file://localhost/C:/Music/Tests/Pulse.mp3"            Kind="MP3 File" Tonality="6A" />
+    <TRACK TrackID="7"  Name="Aurora"            Location="file://localhost/C:/Music/Tests/Aurora.m4a"           Kind="M4A File" Tonality="3B" />
+    <TRACK TrackID="8"  Name="Gravity"           Location="file://localhost/C:/Music/Tests/Gravity.mp3"          Kind="MP3 File" Tonality="10A" />
+    <TRACK TrackID="9"  Name="Sunset Drive"      Location="file://localhost/C:/Music/Tests/Sunset_Drive.m4a"     Kind="M4A File" Tonality="9B" />
+    <TRACK TrackID="10" Name="Northern Star"     Location="file://localhost/C:/Music/Tests/Northern_Star.m4a"    Kind="M4A File" Tonality="12A" />
+    <TRACK TrackID="11" Name="Lighthouse"        Location="file://localhost/C:/Music/Tests/Lighthouse.mp3"       Kind="MP3 File" Tonality="1B" />
+    <TRACK TrackID="12" Name="Firefly"           Location="file://localhost/C:/Music/Tests/Firefly.m4a"          Kind="M4A File" Tonality="4A" />
+    <TRACK TrackID="13" Name="Orbit"             Location="file://localhost/C:/Music/Tests/Orbit.m4a"            Kind="M4A File" Tonality="7B" />
+    <TRACK TrackID="14" Name="Voyager"           Location="file://localhost/C:/Music/Tests/Voyager.mp3"          Kind="MP3 File" Tonality="9A" />
+    <TRACK TrackID="15" Name="Afterglow"         Location="file://localhost/C:/Music/Tests/Afterglow.wav"        Kind="WAV File" Tonality="5B" />
+    <TRACK TrackID="16" Name="Stardust"          Location="file://localhost/C:/Music/Tests/Stardust.m4a"         Kind="M4A File" Tonality="6B" />
+    <TRACK TrackID="17" Name="Runaway"           Location="file://localhost/C:/Music/Tests/Runaway.mp3"          Kind="MP3 File" Tonality="8B" />
+    <TRACK TrackID="18" Name="Serenity"          Location="file://localhost/C:/Music/Tests/Serenity.m4a"         Kind="M4A File" Tonality="10B" />
+    <TRACK TrackID="19" Name="Phantom"           Location="file://localhost/C:/Music/Tests/Phantom.aiff"         Kind="AIFF File" Tonality="2A" />
+    <TRACK TrackID="20" Name="Blue Horizon"      Location="file://localhost/C:/Music/Tests/Blue_Horizon.m4a"     Kind="M4A File" Tonality="11A" />
+  </COLLECTION>
+  <PLAYLISTS>
+    <NODE Type="0" Name="ROOT">
+      <!-- Required management folder and Delete playlist used by tooling/tests -->
+      <NODE Type="0" Name="LIBRARY MANAGEMENT">
+        <NODE Type="1" Name="Delete">
+          <TRACK Key="1" />
+          <TRACK Key="2" />
+          <TRACK Key="3" />
+        </NODE>
+      </NODE>
+
+      <!-- A top-level folder grouping multiple playlists -->
+      <NODE Type="0" Name="DJ Prep">
+        <NODE Type="1" Name="Warmup">
+          <TRACK Key="9" />
+          <TRACK Key="12" />
+          <TRACK Key="16" />
+        </NODE>
+        <NODE Type="1" Name="Peak Time">
+          <TRACK Key="5" />
+          <TRACK Key="6" />
+          <TRACK Key="14" />
+          <TRACK Key="18" />
+        </NODE>
+        <NODE Type="1" Name="Chillout">
+          <TRACK Key="10" />
+          <TRACK Key="11" />
+          <TRACK Key="18" />
+        </NODE>
+      </NODE>
+
+      <!-- Nested folders to mimic realistic hierarchies -->
+      <NODE Type="0" Name="Genres">
+        <NODE Type="0" Name="House">
+          <NODE Type="1" Name="Melodic House">
+            <TRACK Key="1" />
+            <TRACK Key="7" />
+            <TRACK Key="13" />
+            <TRACK Key="20" />
+          </NODE>
+          <NODE Type="1" Name="Tech House">
+            <TRACK Key="6" />
+            <TRACK Key="8" />
+            <TRACK Key="14" />
+          </NODE>
+        </NODE>
+        <NODE Type="0" Name="Trance">
+          <NODE Type="1" Name="Progressive Trance">
+            <TRACK Key="3" />
+            <TRACK Key="10" />
+            <TRACK Key="15" />
+          </NODE>
+          <NODE Type="1" Name="Uplifting Trance">
+            <TRACK Key="4" />
+            <TRACK Key="12" />
+            <TRACK Key="19" />
+          </NODE>
+        </NODE>
+      </NODE>
+
+      <!-- A standalone playlist at root level -->
+      <NODE Type="1" Name="Favorites">
+        <TRACK Key="1" />
+        <TRACK Key="5" />
+        <TRACK Key="9" />
+        <TRACK Key="18" />
+      </NODE>
+    </NODE>
+  </PLAYLISTS>
+</DJ_PLAYLISTS>

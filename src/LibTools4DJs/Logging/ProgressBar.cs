@@ -4,9 +4,12 @@
 
 namespace LibTools4DJs.Logging
 {
+    using System.Diagnostics.CodeAnalysis;
+
     /// <summary>
     /// Renders a lightweight console progress bar with label, counts, and elapsed time.
     /// </summary>
+    [ExcludeFromCodeCoverage]
     public sealed class ProgressBar
     {
         private readonly DateTime start = DateTime.UtcNow;

@@ -16,6 +16,7 @@ public sealed class SyncMikFolderToRekordboxHandler
 {
     private readonly ILogger log;
     private readonly RekordboxXmlLibrary library;
+    private readonly IMikDaoFactory mikDaoFactory;
     private ProgressBar? progress;
 
     /// <summary>
@@ -23,9 +24,10 @@ public sealed class SyncMikFolderToRekordboxHandler
     /// </summary>
     /// <param name="library">Rekordbox XML library abstraction.</param>
     /// <param name="log">Logger for console output.</param>
-    public SyncMikFolderToRekordboxHandler(RekordboxXmlLibrary library, ILogger log)
+    public SyncMikFolderToRekordboxHandler(RekordboxXmlLibrary library, IMikDaoFactory mikDaoFactory, ILogger log)
     {
         this.library = library ?? throw new ArgumentNullException(nameof(library));
+        this.mikDaoFactory = mikDaoFactory ?? throw new ArgumentNullException(nameof(mikDaoFactory));
         this.log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
@@ -54,7 +56,7 @@ public sealed class SyncMikFolderToRekordboxHandler
         // Build map of Rekordbox collection by normalized absolute path -> TrackID
         var rbPathToTrackId = this.GetRekordboxPathToTrackIdMap();
 
-        await using MikDao dao = new(mikDbPath);
+        await using IMikDao dao = this.mikDaoFactory.CreateMikDao(mikDbPath);
         string? targetMikFolderId = await dao.GetRootFolderIdByNameAsync(targetMikFolderName);
 
         if (string.IsNullOrWhiteSpace(targetMikFolderId))
@@ -97,7 +99,7 @@ public sealed class SyncMikFolderToRekordboxHandler
         this.PrintSummary(treeRoot);
     }
 
-    private static async Task<List<MikPlaylistDescriptor>> GetMikPlaylistDescriptorsAsync(string targetMikFolderId, string targetMikFolderName, MikDao dao, Dictionary<string, TreeNode> folderNodes)
+    private static async Task<List<MikPlaylistDescriptor>> GetMikPlaylistDescriptorsAsync(string targetMikFolderId, string targetMikFolderName, IMikDao dao, Dictionary<string, TreeNode> folderNodes)
     {
         var playlistDescriptors = new List<MikPlaylistDescriptor>();
         var queue = new Queue<(string FolderId, string FolderPath)>();

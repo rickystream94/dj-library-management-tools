@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DJ_PLAYLISTS Version="1.0.0">
+  <PRODUCT Name="rekordbox" Version="7.2.8" Company="AlphaTheta"/>
+  <COLLECTION Entries="3">
+    <TRACK TrackID="101" Name="Test A" Location="file://localhost/C:/Music/Tests/TestA.m4a" Kind="M4A File" Tonality="8A" />
+    <TRACK TrackID="102" Name="Test B" Location="file://localhost/C:/Music/Tests/TestB.mp3" Kind="MP3 File" Tonality="5A" />
+    <TRACK TrackID="103" Name="Test C" Location="file://localhost/C:/Music/Tests/TestC.wav" Kind="WAV File" Tonality="2B" />
+  </COLLECTION>
+  <PLAYLISTS>
+    <NODE Type="0" Name="ROOT">
+      <!-- Intentionally omit LIBRARY MANAGEMENT folder to trigger exceptions -->
+      <NODE Type="0" Name="Some Folder">
+        <NODE Type="1" Name="Some Playlist">
+          <TRACK Key="101" />
+        </NODE>
+      </NODE>
+    </NODE>
+  </PLAYLISTS>
+</DJ_PLAYLISTS>

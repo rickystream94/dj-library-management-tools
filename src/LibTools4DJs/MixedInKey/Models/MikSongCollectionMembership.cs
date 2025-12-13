@@ -10,7 +10,7 @@ namespace LibTools4DJs.MixedInKey.Models
     /// <param name="songId">The Song row ID.</param>
     /// <param name="collectionId">The Collection row ID (playlist).</param>
     /// <param name="sequence">The zero-based sequence order within the playlist.</param>
-    internal sealed class MikSongCollectionMembership(string songId, string collectionId, int sequence)
+    public sealed class MikSongCollectionMembership(string songId, string collectionId, int sequence)
     {
         /// <summary>
         /// Gets the Song ID.

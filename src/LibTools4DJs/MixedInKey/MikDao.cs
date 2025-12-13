@@ -8,10 +8,8 @@ namespace LibTools4DJs.MixedInKey
     using LibTools4DJs.Utils;
     using Microsoft.Data.Sqlite;
 
-    /// <summary>
-    /// Data access object (DAO) for Mixed In Key's SQLite database, exposing helpers for collections and memberships.
-    /// </summary>
-    internal class MikDao : IAsyncDisposable
+    /// <inheritdoc/>
+    public class MikDao : IMikDao
     {
         private readonly string mikDbPath;
         private readonly Lazy<Task<SqliteConnection>> connectionLazy;
@@ -30,25 +28,15 @@ namespace LibTools4DJs.MixedInKey
             this.songIdsByPathLazy = new Lazy<Task<Dictionary<string, string>>>(this.GetTrackFilePathToIdMapAsync);
         }
 
-        /// <summary>
-        /// Gets a cached map of existing collections keyed by <see cref="MikCollection"/> (ParentId, Name, IsFolder).
-        /// </summary>
+        /// <inheritdoc/>
         public Task<Dictionary<MikCollection, string>> ExistingCollections => this.existingCollectionsLazy.Value;
 
-        /// <summary>
-        /// Gets a cached map of normalized absolute file paths to Song IDs.
-        /// </summary>
+        /// <inheritdoc/>
         public Task<Dictionary<string, string>> SongIdsByPath => this.songIdsByPathLazy.Value;
 
         private Task<SqliteConnection> Connection => this.connectionLazy.Value;
 
-        /// <summary>
-        /// Creates a new collection (folder or playlist).
-        /// </summary>
-        /// <param name="newCollection">The collection model (name, parent, folder flag).</param>
-        /// <param name="id">The ID to assign.</param>
-        /// <param name="tx">Optional transaction to join.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <inheritdoc/>
         public async Task CreateNewCollectionAsync(MikCollection newCollection, string id, SqliteTransaction? tx = null)
         {
             using var insertCmd = (await this.Connection).CreateCommand();
@@ -70,11 +58,7 @@ namespace LibTools4DJs.MixedInKey
             await insertCmd.ExecuteNonQueryAsync();
         }
 
-        /// <summary>
-        /// Gets the current max sequence number in a playlist, or -1 when empty.
-        /// </summary>
-        /// <param name="collectionId">Playlist collection ID.</param>
-        /// <returns>The max sequence or -1.</returns>
+        /// <inheritdoc/>
         public async Task<int> GetMaxSongSequenceInPlaylistAsync(string collectionId)
         {
             using var cmd = (await this.Connection).CreateCommand();
@@ -84,11 +68,7 @@ namespace LibTools4DJs.MixedInKey
             return Convert.ToInt32(result);
         }
 
-        /// <summary>
-        /// Retrieves the set of Song IDs currently present in a playlist.
-        /// </summary>
-        /// <param name="collectionId">Playlist collection ID.</param>
-        /// <returns>Set of Song IDs.</returns>
+        /// <inheritdoc/>
         public async Task<HashSet<string>> GetSongsInPlaylistAsync(string collectionId)
         {
             var set = new HashSet<string>();
@@ -105,12 +85,7 @@ namespace LibTools4DJs.MixedInKey
             return set;
         }
 
-        /// <summary>
-        /// Inserts memberships for songs into a playlist.
-        /// </summary>
-        /// <param name="memberships">Membership rows to insert.</param>
-        /// <param name="tx">Optional transaction to join.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <inheritdoc/>
         public async Task AddSongsToPlaylistAsync(IEnumerable<MikSongCollectionMembership> memberships, SqliteTransaction? tx = null)
         {
             foreach (var membership in memberships)
@@ -127,10 +102,7 @@ namespace LibTools4DJs.MixedInKey
             }
         }
 
-        /// <summary>
-        /// Resets the MIK library structure by deleting all memberships and non-system collections.
-        /// </summary>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <inheritdoc/>
         public async Task ResetLibraryAsync()
         {
             var conn = await this.Connection;
@@ -166,37 +138,14 @@ namespace LibTools4DJs.MixedInKey
             this.existingCollectionsLazy = new Lazy<Task<Dictionary<MikCollection, string>>>(this.GetExistingCollectionsAsync);
         }
 
-        /// <summary>
-        /// Begins a new database transaction.
-        /// </summary>
-        /// <returns>The started transaction.</returns>
+        /// <inheritdoc/>
         public async Task<SqliteTransaction> BeginTransactionAsync()
         {
             var tx = (await this.Connection).BeginTransaction();
             return tx;
         }
 
-        /// <summary>
-        /// Disposes the DAO by closing the SQLite connection if initialized.
-        /// </summary>
-        /// <returns>A task representing the asynchronous dispose operation.</returns>
-        public async ValueTask DisposeAsync()
-        {
-            if (this.connectionLazy.IsValueCreated)
-            {
-                var connection = await this.Connection;
-                await connection.CloseAsync();
-                await connection.DisposeAsync();
-            }
-        }
-
-        // New helper: get root folder id by name
-
-        /// <summary>
-        /// Gets the root folder ID by name.
-        /// </summary>
-        /// <param name="name">Folder name.</param>
-        /// <returns>The folder ID or null.</returns>
+        /// <inheritdoc/>
         public async Task<string?> GetRootFolderIdByNameAsync(string name)
         {
             using var cmd = (await this.Connection).CreateCommand();
@@ -206,11 +155,7 @@ namespace LibTools4DJs.MixedInKey
             return result as string;
         }
 
-        /// <summary>
-        /// Lists child folders under the specified parent folder.
-        /// </summary>
-        /// <param name="parentId">Parent folder ID.</param>
-        /// <returns>List of (Id, Name) tuples.</returns>
+        /// <inheritdoc/>
         public async Task<List<(string Id, string Name)>> GetChildFoldersAsync(string parentId)
         {
             var list = new List<(string, string)>();
@@ -228,11 +173,7 @@ namespace LibTools4DJs.MixedInKey
             return list;
         }
 
-        /// <summary>
-        /// Lists child playlists under the specified parent folder.
-        /// </summary>
-        /// <param name="parentId">Parent folder ID.</param>
-        /// <returns>List of (Id, Name) tuples.</returns>
+        /// <inheritdoc/>
         public async Task<List<(string Id, string Name)>> GetChildPlaylistsAsync(string parentId)
         {
             var list = new List<(string, string)>();
@@ -250,13 +191,7 @@ namespace LibTools4DJs.MixedInKey
             return list;
         }
 
-    // New helper: get ordered song file paths for a playlist
-
-    /// <summary>
-        /// Gets ordered song file paths for a playlist.
-        /// </summary>
-        /// <param name="collectionId">Playlist collection ID.</param>
-        /// <returns>List of absolute file paths, order by sequence.</returns>
+        /// <inheritdoc/>
         public async Task<List<string>> GetPlaylistSongFilesAsync(string collectionId)
         {
             var files = new List<string>();
@@ -271,6 +206,17 @@ namespace LibTools4DJs.MixedInKey
             }
 
             return files;
+        }
+
+        /// <inheritdoc/>
+        public async ValueTask DisposeAsync()
+        {
+            if (this.connectionLazy.IsValueCreated)
+            {
+                var connection = await this.Connection;
+                await connection.CloseAsync();
+                await connection.DisposeAsync();
+            }
         }
 
         private async Task<SqliteConnection> InitializeConnectionAsync()

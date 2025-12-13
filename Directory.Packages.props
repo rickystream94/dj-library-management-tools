@@ -8,5 +8,8 @@
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.10" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.435" />
     <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.100" />
+    <PackageVersion Include="MSTest.TestAdapter" Version="3.4.0" />
+    <PackageVersion Include="MSTest.TestFramework" Version="3.4.0" />
+    <PackageVersion Include="Microsoft.NET.Test.SDK" Version="18.0.1" />
   </ItemGroup>
 </Project>

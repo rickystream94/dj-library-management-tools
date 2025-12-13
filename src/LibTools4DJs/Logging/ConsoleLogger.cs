@@ -4,9 +4,12 @@
 
 namespace LibTools4DJs.Logging;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 /// Console logger with optional progress bar and file persistence.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed class ConsoleLogger : ILogger
 {
     private readonly bool debugEnabled;

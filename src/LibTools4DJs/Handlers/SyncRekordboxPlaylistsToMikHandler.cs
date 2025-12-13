@@ -20,16 +20,19 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
 {
     private readonly RekordboxXmlLibrary library;
     private readonly ILogger log;
+    private readonly IMikDaoFactory mikDaoFactory;
     private ProgressBar? progress;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SyncRekordboxPlaylistsToMikHandler"/> class.
     /// </summary>
     /// <param name="library">Rekordbox XML library abstraction.</param>
+    /// <param name="mikDaoFactory">Factory to create an <see cref="IMikDao"/> from a database path.</param>
     /// <param name="log">Logger for console output.</param>
-    public SyncRekordboxPlaylistsToMikHandler(RekordboxXmlLibrary library, ILogger log)
+    public SyncRekordboxPlaylistsToMikHandler(RekordboxXmlLibrary library, IMikDaoFactory mikDaoFactory, ILogger log)
     {
         this.library = library ?? throw new ArgumentNullException(nameof(library));
+        this.mikDaoFactory = mikDaoFactory ?? throw new ArgumentNullException(nameof(mikDaoFactory));
         this.log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
@@ -51,22 +54,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         // Backup existing DB when applying changes
         if (!whatIf)
         {
-            try
-            {
-                var dbDir = Path.GetDirectoryName(mikDbPath)!;
-                var backupDir = Path.Combine(dbDir, Constants.BackupFolderName);
-                Directory.CreateDirectory(backupDir);
-
-                var timestamp = DateTime.Now.ToString(Constants.DefaultTimestampFormat);
-                var backupFile = Path.Combine(backupDir, $"{Path.GetFileNameWithoutExtension(mikDbPath)}_{timestamp}.db");
-                File.Copy(mikDbPath, backupFile, overwrite: false);
-                this.log.Info($"Backup created: {backupFile}");
-            }
-            catch (Exception ex)
-            {
-                // Fail-safe: surface clear error; avoid proceeding without backup
-                throw new IOException($"Failed to create backup of MIK database '{mikDbPath}'. Aborting to avoid data loss. Details: {ex.Message}", ex);
-            }
+            this.BackupMikDb(mikDbPath);
         }
 
         var playlistsRoot = this.library.GetPlaylistsRoot() ?? throw new InvalidOperationException("Root playlist node not found in Rekordbox XML.");
@@ -76,7 +64,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             this.log.Debug("[WhatIf] Simulating playlist sync. No database changes will be committed.");
         }
 
-        await using MikDao mikDao = new(mikDbPath);
+        await using IMikDao mikDao = this.mikDaoFactory.CreateMikDao(mikDbPath);
 
         // Optional reset: wipe MIK library structure (collections and memberships), preserving system rows
         if (resetMikLibrary)
@@ -171,7 +159,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         string name,
         string? parentId,
         bool isFolder,
-        MikDao mikDao,
+        IMikDao mikDao,
         SyncStats stats,
         SqliteTransaction? tx = null,
         bool whatIf = false)
@@ -205,7 +193,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
     private async Task TraverseNodeAsync(
         XmlNode node,
         string? parentId,
-        MikDao mikDao,
+        IMikDao mikDao,
         SyncStats stats,
         SqliteTransaction? tx = null,
         bool whatIf = false)
@@ -264,7 +252,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
     private async Task ProcessPlaylistAsync(
         XmlElement playlistNode,
         (MikCollection Collection, string Id) collectionInfo,
-        MikDao mikDao,
+        IMikDao mikDao,
         SyncStats stats,
         SqliteTransaction? tx = null,
         bool whatIf = false)
@@ -337,7 +325,7 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
         }
     }
 
-    private async Task ResetMikLibraryAsync(MikDao mikDao, bool whatIf)
+    private async Task ResetMikLibraryAsync(IMikDao mikDao, bool whatIf)
     {
         if (whatIf)
         {
@@ -367,6 +355,26 @@ public sealed class SyncRekordboxPlaylistsToMikHandler
             {
                 throw new IOException($"Failed to reset MIK library structure. No changes were applied. Details: {ex.Message}", ex);
             }
+        }
+    }
+
+    private void BackupMikDb(string mikDbPath)
+    {
+        try
+        {
+            var dbDir = Path.GetDirectoryName(mikDbPath)!;
+            var backupDir = Path.Combine(dbDir, Constants.BackupFolderName);
+            Directory.CreateDirectory(backupDir);
+
+            var timestamp = DateTime.Now.ToString(Constants.DefaultTimestampFormat);
+            var backupFile = Path.Combine(backupDir, $"{Path.GetFileNameWithoutExtension(mikDbPath)}_{timestamp}.db");
+            File.Copy(mikDbPath, backupFile, overwrite: false);
+            this.log.Info($"Backup created: {backupFile}");
+        }
+        catch (Exception ex)
+        {
+            // Fail-safe: surface clear error; avoid proceeding without backup
+            throw new IOException($"Failed to create backup of MIK database '{mikDbPath}'. Aborting to avoid data loss. Details: {ex.Message}", ex);
         }
     }
 

@@ -7,7 +7,7 @@ namespace LibTools4DJs.Utils
     /// <summary>
     /// Path-related helper utilities.
     /// </summary>
-    internal static class PathUtils
+    public static class PathUtils
     {
         /// <summary>
         /// Normalizes a file path by trimming, converting forward slashes to backslashes, and attempting to canonicalize via GetFullPath.

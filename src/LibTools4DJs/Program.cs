@@ -5,19 +5,25 @@
 namespace LibTools4DJs;
 
 using System.CommandLine;
+using System.Diagnostics.CodeAnalysis;
 using LibTools4DJs.Handlers;
 using LibTools4DJs.Logging;
+using LibTools4DJs.MixedInKey;
 using LibTools4DJs.Rekordbox;
 
 /// <summary>
 /// Entry point and command wiring for the LibTools4DJs CLI.
 /// </summary>
+[ExcludeFromCodeCoverage]
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
         // Root command description
-        var root = new RootCommand("Library Management Tools for DJs - CLI");
+        var root = new RootCommand(Constants.CliToolDescription);
+
+        // Ensure help/usage shows the global tool command name rather than the assembly name
+        root.Name = Constants.CliToolName;
 
         // Global/logging options
         var debugOption = new Option<bool>(Constants.DebugOption, () => false, description: "Enable verbose debug logs during execution.");
@@ -140,7 +146,7 @@ internal static class Program
                 mikDb,
                 mikVersion,
                 whatIf,
-                (console, library, mikPath, dryRun) => new SyncRekordboxPlaylistsToMikHandler(library, console).RunAsync(mikPath, dryRun, resetMikLibrary, debug),
+                (console, library, mikPath, dryRun) => new SyncRekordboxPlaylistsToMikHandler(library, new MikDaoFactory(), console).RunAsync(mikPath, dryRun, resetMikLibrary, debug),
                 extraParams: new[] { (resetMikLibraryOption.Name, (object?)resetMikLibrary), (debugOption.Name, (object?)debug), (saveLogsOption.Name, (object?)saveLogs) },
                 debugEnabled: debug,
                 saveLogs: saveLogs);
@@ -188,7 +194,7 @@ internal static class Program
                 mikDb,
                 mikVersion,
                 whatIf,
-                (console, library, mikPath, dryRun) => new SyncMikFolderToRekordboxHandler(library, console).RunAsync(mikPath, mikFolder, dryRun, debug),
+                (console, library, mikPath, dryRun) => new SyncMikFolderToRekordboxHandler(library, new MikDaoFactory(), console).RunAsync(mikPath, mikFolder, dryRun, debug),
                 extraParams: new[] { (mikFolderNameOption.Name, (object?)mikFolder), (debugOption.Name, (object?)debug), (saveLogsOption.Name, (object?)saveLogs) },
                 debugEnabled: debug,
                 saveLogs: saveLogs);

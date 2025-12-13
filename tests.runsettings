@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <!-- Visual Studio Code Coverage configuration -->
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0">
+        <Configuration>
+          <CodeCoverage>
+            <!-- Exclude the test project assembly from coverage -->
+            <ModulePaths>
+              <Exclude>
+                <!-- Regex on module (assembly) path; adjust if your assembly name changes -->
+                <ModulePath>.*\\LibTools4DJs\.Tests\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+            <!-- Respect [ExcludeFromCodeCoverage] attributes in code -->
+            <Attributes>
+              <Exclude>
+                <Attribute>^System\.Diagnostics\.CodeAnalysis\.ExcludeFromCodeCoverageAttribute$</Attribute>
+              </Exclude>
+            </Attributes>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

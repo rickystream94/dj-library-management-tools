@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DJ_PLAYLISTS Version="1.0">
+  <PRODUCT Name="rekordbox" Version="6.9.0"/>
+  <COLLECTION>
+    <TRACK TrackID="1" Name="Skyline" Location="file://localhost/C:/Music/Tests/Skyline.m4a"/>
+    <TRACK TrackID="2" Name="Sunset Drive" Location="file://localhost/C:/Music/Tests/Sunset%20Drive.m4a"/>
+  </COLLECTION>
+  <PLAYLISTS>
+    <NODE Type="0" Name="ROOT">
+      <NODE Type="0" Name="LIBRARY MANAGEMENT">
+        <!-- Intentionally no Delete playlist here -->
+        <NODE Type="1" Name="Analysis" KeyType="0" Entries="0" />
+      </NODE>
+    </NODE>
+  </PLAYLISTS>
+</DJ_PLAYLISTS>

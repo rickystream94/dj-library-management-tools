@@ -39,6 +39,10 @@ namespace LibTools4DJs
         internal const string EnergyLevelToColourCodeMappingFileName = "EnergyLevelToColorCode.json";
         internal const string MikDatabaseFileName = "MIKStore.db";
 
+        // CLI Tool
+        internal const string CliToolDescription = ".NET CLI tools for DJs to streamline library management across Rekordbox and Mixed In Key, reduce friction between apps, and automate reliable sync workflows.";
+        internal const string CliToolName = "djtools";
+
         // CLI Commands
         internal const string DeleteTracksCommand = "delete-tracks";
         internal const string SyncMikTagsToRekordboxCommand = "sync-mik-tags-to-rekordbox";

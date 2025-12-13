@@ -10,7 +10,7 @@ namespace LibTools4DJs.MixedInKey.Models
     /// <param name="parentId">Optional parent folder ID; null for root-level nodes.</param>
     /// <param name="name">The collection name.</param>
     /// <param name="isFolder">True for a folder; false for a playlist.</param>
-    internal sealed class MikCollection(string? parentId, string name, bool isFolder) : IEquatable<MikCollection>
+    public sealed class MikCollection(string? parentId, string name, bool isFolder) : IEquatable<MikCollection>
     {
         /// <summary>
         /// Gets the parent folder ID or null when at the root level.
