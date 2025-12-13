@@ -1,6 +1,6 @@
 # LibTools4DJs CLI
 
-Console utilities to help DJs with advanced library management tasks involving [**Rekordbox**](https://rekordbox.com/) and [**Mixed In Key**](https://mixedinkey.com/).
+.NET CLI tools for DJs to streamline library management across [**Rekordbox**](https://rekordbox.com/) and [**Mixed In Key**](https://mixedinkey.com/), reduce friction between apps, and automate reliable sync workflows.
 
 ## Table of Contents
 

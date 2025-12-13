@@ -7,7 +7,7 @@
     <RootNamespace>LibTools4DJs</RootNamespace>
     <AssemblyName>LibTools4DJs</AssemblyName>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Description>CLI utilities to improve integration between Rekordbox and Mixed In Key.</Description>
+  <Description>.NET CLI tools for DJs to streamline library management across Rekordbox and Mixed In Key, reduce friction between apps, and automate reliable sync workflows.</Description>
     <Platforms>x64</Platforms>
     <!-- .NET Global Tool packaging -->
     <PackAsTool>true</PackAsTool>
