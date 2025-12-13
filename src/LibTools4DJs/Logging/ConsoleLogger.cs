@@ -1,46 +1,63 @@
+// <copyright file="ConsoleLogger.cs" company="LibTools4DJs">
+// Copyright (c) LibTools4DJs. All rights reserved.
+// </copyright>
+
 namespace LibTools4DJs.Logging;
 
+/// <summary>
+/// Console logger with optional progress bar and file persistence.
+/// </summary>
 public sealed class ConsoleLogger : ILogger
 {
-    private readonly bool _debugEnabled;
-    private readonly string? _logFilePath;
-    private ProgressBar? _progress;
+    private readonly bool debugEnabled;
+    private readonly string? logFilePath;
+    private ProgressBar? progress;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ConsoleLogger"/> class.
+    /// </summary>
+    /// <param name="debugEnabled">Enable verbose debug output.</param>
+    /// <param name="logFilePath">Optional path to append logs to.</param>
     public ConsoleLogger(bool debugEnabled = false, string? logFilePath = null)
     {
-        this._debugEnabled = debugEnabled;
-        this._logFilePath = logFilePath;
+        this.debugEnabled = debugEnabled;
+        this.logFilePath = logFilePath;
     }
 
+    /// <inheritdoc />
     public void WithProgressBar(ProgressBar progressBar)
     {
-        this._progress = progressBar;
+        this.progress = progressBar;
     }
 
+    /// <inheritdoc />
     public void Info(string message, ConsoleColor? consoleColor = null)
     {
         this.Log(message, consoleColor);
-        this._progress?.Render();
+        this.progress?.Render();
     }
 
+    /// <inheritdoc />
     public void Warn(string message)
     {
         this.Log(message, ConsoleColor.Yellow);
-        this._progress?.Render();
+        this.progress?.Render();
     }
 
+    /// <inheritdoc />
     public void Error(string message)
     {
         this.Log(message, ConsoleColor.Red);
-        this._progress?.Render();
+        this.progress?.Render();
     }
 
+    /// <inheritdoc />
     public void Debug(string message)
     {
-        if (this._debugEnabled)
+        if (this.debugEnabled)
         {
             this.Log(message, ConsoleColor.DarkGray);
-            this._progress?.Render();
+            this.progress?.Render();
         }
         else
         {
@@ -49,8 +66,11 @@ public sealed class ConsoleLogger : ILogger
         }
     }
 
-    // Pretty print a command invocation with its parameter names and values in cyan.
-    // parameters: collection of (optionOrArgName, value) pairs. Value may be null.
+    /// <summary>
+    /// Pretty prints a command invocation with its parameter names and values in cyan.
+    /// </summary>
+    /// <param name="commandName">The command name.</param>
+    /// <param name="parameters">Collection of (optionOrArgName, value) pairs. Value may be null.</param>
     public void PrintCommandInvocation(string commandName, IEnumerable<(string Name, object? Value)> parameters)
     {
         var prev = Console.ForegroundColor;
@@ -61,22 +81,25 @@ public sealed class ConsoleLogger : ILogger
 
         // Build lines
         var header = $"Command: {commandName}";
-        var lines = new List<string> { header };
+        var lines = new List<string>
+        {
+            header,
+        };
         if (paramList.Count > 0)
         {
-            lines.Add("");
-            foreach (var (Name, Value) in paramList)
+            lines.Add(string.Empty);
+            foreach (var (name, value) in paramList)
             {
-                var valStr = Value switch
+                var valStr = value switch
                 {
                     null => "(null)",
                     bool b => b ? "true" : "false",
                     FileInfo fi => fi.FullName,
                     DirectoryInfo di => di.FullName,
-                    _ => Value.ToString() ?? string.Empty
+                    _ => value.ToString() ?? string.Empty,
                 };
                 valStr = valStr.Replace('\n', ' ').Replace('\r', ' ');
-                lines.Add($"{Name.PadRight(nameColWidth)} : {valStr}");
+                lines.Add($"{name.PadRight(nameColWidth)} : {valStr}");
             }
         }
 
@@ -91,7 +114,7 @@ public sealed class ConsoleLogger : ILogger
 
         Console.WriteLine(Bar('└', '─', '┘'));
         Console.ForegroundColor = prev;
-        this._progress?.Render();
+        this.progress?.Render();
         this.PersistToFile(string.Join(Environment.NewLine, lines));
     }
 
@@ -113,11 +136,14 @@ public sealed class ConsoleLogger : ILogger
 
     private void PersistToFile(string message)
     {
-        if (string.IsNullOrWhiteSpace(this._logFilePath))
+        if (string.IsNullOrWhiteSpace(this.logFilePath))
+        {
             return;
+        }
+
         try
         {
-            File.AppendAllText(this._logFilePath!, message + Environment.NewLine);
+            File.AppendAllText(this.logFilePath!, message + Environment.NewLine);
         }
         catch
         {

@@ -1,10 +1,17 @@
-using System.CommandLine;
-using LibTools4DJs.Rekordbox;
-using LibTools4DJs.Handlers;
-using LibTools4DJs.Logging;
+// <copyright file="Program.cs" company="LibTools4DJs">
+// Copyright (c) LibTools4DJs. All rights reserved.
+// </copyright>
 
 namespace LibTools4DJs;
 
+using System.CommandLine;
+using LibTools4DJs.Handlers;
+using LibTools4DJs.Logging;
+using LibTools4DJs.Rekordbox;
+
+/// <summary>
+/// Entry point and command wiring for the LibTools4DJs CLI.
+/// </summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -26,24 +33,30 @@ internal static class Program
             xmlOption,
             whatIfOption,
             debugOption,
-            saveLogsOption
+            saveLogsOption,
         };
-        deleteCmd.SetHandler(async (FileInfo xml, bool whatIf, bool debug, bool saveLogs) =>
+        deleteCmd.SetHandler(
+            async (FileInfo xml, bool whatIf, bool debug, bool saveLogs) =>
         {
             var logPath = saveLogs ? InitLogFile(Constants.DeleteTracksCommand) : null;
             var console = new ConsoleLogger(debug, logPath);
-            console.PrintCommandInvocation(Constants.DeleteTracksCommand,
-                [
-                    (xmlOption.Name, xml.FullName),
-                    (whatIfOption.Name, whatIf),
-                    (debugOption.Name, debug),
-                    (saveLogsOption.Name, saveLogs)
-                ]);
+            var deleteArgs = new (string Name, object? Value)[]
+            {
+                (xmlOption.Name, xml.FullName),
+                (whatIfOption.Name, whatIf),
+                (debugOption.Name, debug),
+                (saveLogsOption.Name, saveLogs),
+            };
+            console.PrintCommandInvocation(Constants.DeleteTracksCommand, deleteArgs);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new DeleteTracksHandler(library, console);
             await handler.RunAsync(whatIf);
             console.Info("Delete command completed.");
-        }, xmlOption, whatIfOption, debugOption, saveLogsOption);
+        },
+            xmlOption,
+            whatIfOption,
+            debugOption,
+            saveLogsOption);
 
         // sync-mik-tags-to-rekordbox command
         var syncCmd = new Command(Constants.SyncMikTagsToRekordboxCommand, "Sync Mixed In Key key tag for M4A tracks & energy level back into Rekordbox XML collection. This also sets a colour to the track based on the energy level.")
@@ -51,24 +64,30 @@ internal static class Program
             xmlOption,
             whatIfOption,
             debugOption,
-            saveLogsOption
+            saveLogsOption,
         };
-        syncCmd.SetHandler(async (FileInfo xml, bool whatIf, bool debug, bool saveLogs) =>
+        syncCmd.SetHandler(
+            async (FileInfo xml, bool whatIf, bool debug, bool saveLogs) =>
         {
             var logPath = saveLogs ? InitLogFile(Constants.SyncMikTagsToRekordboxCommand) : null;
             var console = new ConsoleLogger(debug, logPath);
-            console.PrintCommandInvocation(Constants.SyncMikTagsToRekordboxCommand,
-                [
-                    (xmlOption.Name, xml.FullName),
-                    (whatIfOption.Name, whatIf),
-                    (debugOption.Name, debug),
-                    (saveLogsOption.Name, saveLogs)
-                ]);
+            var syncArgs = new (string Name, object? Value)[]
+            {
+                (xmlOption.Name, xml.FullName),
+                (whatIfOption.Name, whatIf),
+                (debugOption.Name, debug),
+                (saveLogsOption.Name, saveLogs),
+            };
+            console.PrintCommandInvocation(Constants.SyncMikTagsToRekordboxCommand, syncArgs);
             var library = RekordboxXmlLibrary.Load(xml.FullName);
             var handler = new SyncMikTagsToRekordboxHandler(library, console);
             await handler.RunAsync(whatIf, debug);
             console.Info("Sync MIK tags command completed.");
-        }, xmlOption, whatIfOption, debugOption, saveLogsOption);
+        },
+            xmlOption,
+            whatIfOption,
+            debugOption,
+            saveLogsOption);
 
         // sync-rekordbox-library-to-mik command
         var mikVersionOption = new Option<string>(
@@ -78,24 +97,27 @@ internal static class Program
 
         // --mik-db becomes optional; if omitted, we auto-resolve from USERPROFILE + version
         var mikDbOption = new Option<FileInfo?>(
-            name: Constants.MikDbOption,
-            description: $"Path to Mixed In Key SQLite database ({Constants.MikDatabaseFileName}). Optional; if omitted, the path will be auto-resolved from USERPROFILE and {Constants.MikVersionOption}.",
-            parseArgument: result =>
-            {
-                var token = result.Tokens.SingleOrDefault()?.Value;
-                if (string.IsNullOrWhiteSpace(token))
+                name: Constants.MikDbOption,
+                description: $"Path to Mixed In Key SQLite database ({Constants.MikDatabaseFileName}). Optional; if omitted, the path will be auto-resolved from USERPROFILE and {Constants.MikVersionOption}.",
+                parseArgument: result =>
                 {
-                    // Optional; return null to trigger auto-resolution later
-                    return null;
-                }
-                var fi = new FileInfo(token);
-                if (!fi.Exists)
-                {
-                    result.ErrorMessage = $"MIK database file not found: {fi.FullName}";
-                }
-                return fi;
-            })
-        { IsRequired = false };
+                    var token = result.Tokens.SingleOrDefault()?.Value;
+                    if (string.IsNullOrWhiteSpace(token))
+                    {
+                        // Optional; return null to trigger auto-resolution later
+                        return null;
+                    }
+
+                    var fi = new FileInfo(token);
+                    if (!fi.Exists)
+                    {
+                        result.ErrorMessage = $"MIK database file not found: {fi.FullName}";
+                    }
+
+                    return fi;
+                });
+
+        mikDbOption.IsRequired = false;
 
         var resetMikLibraryOption = new Option<bool>(Constants.ResetMikLibraryOption, () => false, description: "Before syncing, wipe MIK collections and memberships (preserving system rows: Sequence IS NULL AND IsLibrary = 1 AND ParentFolderId IS NULL). Use with caution.");
 
@@ -107,16 +129,29 @@ internal static class Program
             resetMikLibraryOption,
             whatIfOption,
             debugOption,
-            saveLogsOption
+            saveLogsOption,
         };
-        syncRekordboxLibraryToMikCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, bool whatIf, bool resetMikLibrary, bool debug, bool saveLogs) =>
+        syncRekordboxLibraryToMikCmd.SetHandler(
+            async (FileInfo xml, FileInfo? mikDb, string mikVersion, bool whatIf, bool resetMikLibrary, bool debug, bool saveLogs) =>
         {
-            await HandleMikCommandAsync(Constants.SyncRekordboxLibraryToMikCommand, xml, mikDb, mikVersion, whatIf,
+            await HandleMikCommandAsync(
+                Constants.SyncRekordboxLibraryToMikCommand,
+                xml,
+                mikDb,
+                mikVersion,
+                whatIf,
                 (console, library, mikPath, dryRun) => new SyncRekordboxPlaylistsToMikHandler(library, console).RunAsync(mikPath, dryRun, resetMikLibrary, debug),
                 extraParams: new[] { (resetMikLibraryOption.Name, (object?)resetMikLibrary), (debugOption.Name, (object?)debug), (saveLogsOption.Name, (object?)saveLogs) },
                 debugEnabled: debug,
                 saveLogs: saveLogs);
-        }, xmlOption, mikDbOption, mikVersionOption, whatIfOption, resetMikLibraryOption, debugOption, saveLogsOption);
+        },
+            xmlOption,
+            mikDbOption,
+            mikVersionOption,
+            whatIfOption,
+            resetMikLibraryOption,
+            debugOption,
+            saveLogsOption);
 
         // sync-mik-folder-to-rekordbox command
         var mikFolderNameOption = new Option<string>(
@@ -130,6 +165,7 @@ internal static class Program
                     result.ErrorMessage = $"{Constants.MikFolderOption} is required";
                     return null!;
                 }
+
                 return token;
             }) { IsRequired = true };
 
@@ -141,16 +177,29 @@ internal static class Program
             mikFolderNameOption,
             whatIfOption,
             debugOption,
-            saveLogsOption
+            saveLogsOption,
         };
-        syncMikFolderToRekordboxCmd.SetHandler(async (FileInfo xml, FileInfo? mikDb, string mikVersion, string mikFolder, bool whatIf, bool debug, bool saveLogs) =>
+        syncMikFolderToRekordboxCmd.SetHandler(
+            async (FileInfo xml, FileInfo? mikDb, string mikVersion, string mikFolder, bool whatIf, bool debug, bool saveLogs) =>
         {
-            await HandleMikCommandAsync(Constants.SyncMikFolderToRekordboxCommand, xml, mikDb, mikVersion, whatIf,
+            await HandleMikCommandAsync(
+                Constants.SyncMikFolderToRekordboxCommand,
+                xml,
+                mikDb,
+                mikVersion,
+                whatIf,
                 (console, library, mikPath, dryRun) => new SyncMikFolderToRekordboxHandler(library, console).RunAsync(mikPath, mikFolder, dryRun, debug),
                 extraParams: new[] { (mikFolderNameOption.Name, (object?)mikFolder), (debugOption.Name, (object?)debug), (saveLogsOption.Name, (object?)saveLogs) },
                 debugEnabled: debug,
                 saveLogs: saveLogs);
-        }, xmlOption, mikDbOption, mikVersionOption, mikFolderNameOption, whatIfOption, debugOption, saveLogsOption);
+        },
+            xmlOption,
+            mikDbOption,
+            mikVersionOption,
+            mikFolderNameOption,
+            whatIfOption,
+            debugOption,
+            saveLogsOption);
 
         root.AddCommand(deleteCmd);
         root.AddCommand(syncCmd);
@@ -163,7 +212,9 @@ internal static class Program
     private static string? ResolveMikDbPath(ConsoleLogger log, FileInfo? mikDb, string mikVersion)
     {
         if (mikDb is not null)
+        {
             return mikDb.FullName;
+        }
 
         var userProfile = Environment.GetEnvironmentVariable(Constants.UserProfileVariableName);
         if (string.IsNullOrWhiteSpace(userProfile))
@@ -185,6 +236,7 @@ internal static class Program
             log.Error($"Auto-resolved MIK database file not found: {resolved}. Provide {Constants.MikDbOption} explicitly or adjust {Constants.MikVersionOption}.");
             return null;
         }
+
         return resolved;
     }
 
@@ -216,17 +268,22 @@ internal static class Program
         var logPath = saveLogs ? InitLogFile(commandName) : null;
         var console = new ConsoleLogger(debugEnabled, logPath);
         var resolvedMikDbPath = ResolveMikDbPath(console, mikDb, mikVersion);
-        if (resolvedMikDbPath is null) return;
+        if (resolvedMikDbPath is null)
+        {
+            return;
+        }
 
         var paramList = new List<(string Name, object? Value)>
         {
             (Constants.RekordboxXmlOption, xml.FullName),
             (Constants.MikDbOption, resolvedMikDbPath),
             (Constants.MikVersionOption, mikVersion),
-            (Constants.WhatIfOption, whatIf)
+            (Constants.WhatIfOption, whatIf),
         };
         if (extraParams is not null)
+        {
             paramList.AddRange(extraParams);
+        }
 
         PrintInvocation(console, commandName, paramList.ToArray());
 
@@ -245,11 +302,13 @@ internal static class Program
                 result.ErrorMessage = "--xml is required";
                 return null!;
             }
+
             var fi = new FileInfo(token);
             if (!fi.Exists)
             {
                 result.ErrorMessage = $"XML file not found: {fi.FullName}";
             }
+
             return fi;
         })
         { IsRequired = true };

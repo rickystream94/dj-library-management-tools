@@ -1,25 +1,42 @@
-using LibTools4DJs.Logging;
-using LibTools4DJs.Rekordbox;
+// <copyright file="DeleteTracksHandler.cs" company="LibTools4DJs">
+// Copyright (c) LibTools4DJs. All rights reserved.
+// </copyright>
 
 namespace LibTools4DJs.Handlers;
 
+using LibTools4DJs.Logging;
+using LibTools4DJs.Rekordbox;
+
+/// <summary>
+/// Deletes files for tracks listed in the Rekordbox 'LIBRARY MANAGEMENT/Delete' playlist.
+/// </summary>
 public sealed class DeleteTracksHandler
 {
-    private readonly ILogger _log;
-    private readonly RekordboxXmlLibrary _library;
+    private readonly ILogger log;
+    private readonly RekordboxXmlLibrary library;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DeleteTracksHandler"/> class.
+    /// </summary>
+    /// <param name="library">Rekordbox XML library abstraction.</param>
+    /// <param name="log">Logger for user feedback.</param>
     public DeleteTracksHandler(RekordboxXmlLibrary library, ILogger log)
     {
-        this._library = library ?? throw new ArgumentNullException(nameof(library));
-        this._log = log ?? throw new ArgumentNullException(nameof(log));
+        this.library = library ?? throw new ArgumentNullException(nameof(library));
+        this.log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
+    /// <summary>
+    /// Executes the deletion routine, honoring the What-If flag for dry runs.
+    /// </summary>
+    /// <param name="whatIf">When true, no files are deleted; actions are logged only.</param>
+    /// <returns>A completed task once processing finishes.</returns>
     public Task RunAsync(bool whatIf)
     {
-        var deletePlaylistTracks = this._library.GetTracksToDelete().ToList();
+        var deletePlaylistTracks = this.library.GetTracksToDelete().ToList();
         if (deletePlaylistTracks.Count == 0)
         {
-            this._log.Warn("No 'Delete' playlist or no tracks found. Aborting delete operation.");
+            this.log.Warn("No 'Delete' playlist or no tracks found. Aborting delete operation.");
             return Task.CompletedTask;
         }
 
@@ -27,13 +44,15 @@ public sealed class DeleteTracksHandler
             .Select(t => t.GetAttribute(Constants.KeyAttributeName))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .ToHashSet();
-        var tracksToDelete = this._library.GetCollectionTracks()
+        var tracksToDelete = this.library.GetCollectionTracks()
             .Where(t => trackIdsToDelete.Contains(t.GetAttribute(Constants.TrackIdAttributeName)))
             .ToList();
 
-        this._log.Info($"Found {tracksToDelete.Count} tracks to be deleted.");
+        this.log.Info($"Found {tracksToDelete.Count} tracks to be deleted.");
         if (tracksToDelete.Count == 0)
+        {
             return Task.CompletedTask;
+        }
 
         int deleted = 0, failed = 0, missing = 0;
         foreach (var track in tracksToDelete)
@@ -42,7 +61,7 @@ public sealed class DeleteTracksHandler
             var filePath = RekordboxXmlLibrary.DecodeFileUri(location);
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
-                this._log.Warn($"Track file not found: {filePath}");
+                this.log.Warn($"Track file not found: {filePath}");
                 missing++;
                 continue;
             }
@@ -50,24 +69,24 @@ public sealed class DeleteTracksHandler
             var name = Path.GetFileName(filePath);
             if (whatIf)
             {
-                this._log.Info($"[WhatIf] Would delete: {name}");
+                this.log.Info($"[WhatIf] Would delete: {name}");
                 continue;
             }
 
             try
             {
                 File.Delete(filePath);
-                this._log.Info($"Deleted: {name}");
+                this.log.Info($"Deleted: {name}");
                 deleted++;
             }
             catch (Exception ex)
             {
-                this._log.Error($"Failed to delete {name}: {ex.Message}");
+                this.log.Error($"Failed to delete {name}: {ex.Message}");
                 failed++;
             }
         }
 
-        this._log.Info($"Summary:\n" +
+        this.log.Info($"Summary:\n" +
             $"Deleted: {deleted}\n" +
             $"Failed: {failed}\n" +
             $"Missing: {missing}\n" +

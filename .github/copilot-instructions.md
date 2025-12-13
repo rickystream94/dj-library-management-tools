@@ -59,3 +59,10 @@ Missing `LIBRARY MANAGEMENT` → throw early. Ensure energy mapping JSON present
 
 ---
 Feedback welcome: request clarifications or additions (tests strategy, future commands) to evolve these agent notes.
+
+### Coding Conventions
+- Always prefix instance fields and properties with `this.` when referenced within the same class. This improves readability and disambiguation from local variables and parameters.
+- Public APIs must be documented:
+	- For any new public class, struct, enum, interface, or method, include XML documentation comments summarizing purpose, parameters, return values, exceptions, and usage notes.
+	- When changing core functionality of any public API, revisit and update the XML docs to ensure they reflect current behavior and constraints.
+	- Prefer concise summaries plus practical remarks; keep examples minimal but helpful when behavior may be non-obvious.

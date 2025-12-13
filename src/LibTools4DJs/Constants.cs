@@ -1,8 +1,16 @@
-﻿namespace LibTools4DJs
+﻿// <copyright file="Constants.cs" company="LibTools4DJs">
+// Copyright (c) LibTools4DJs. All rights reserved.
+// </copyright>
+#pragma warning disable SA1600 // Elements should be documented
+
+namespace LibTools4DJs
 {
+    /// <summary>
+    /// Centralized constants for Rekordbox XML attributes, playlist/folder names, Mixed In Key defaults, and CLI tokens.
+    /// </summary>
     internal static class Constants
     {
-        #region Rekordbox XML
+        // Rekordbox XML
         internal const string LibraryManagement = "LIBRARY MANAGEMENT";
         internal const string MIKKeyAnalysis = "MIK Key Analysis";
         internal const string MIKEnergyAnalysis = "MIK Energy Level Analysis";
@@ -24,23 +32,20 @@
         internal const string SyncFromMikFolderName = "LibTools4DJs_SyncFromMIK";
         internal const string BackupFolderName = "LibTools4DJs_Backups";
         internal const string LogsFolderName = "LibTools4DJs_Logs";
-        #endregion
 
-        #region Mixed In Key
+        // Mixed In Key
         internal const string MikFolderName = "Mixed In Key";
         internal const string MikDefaultVersion = "11.0";
         internal const string EnergyLevelToColourCodeMappingFileName = "EnergyLevelToColorCode.json";
         internal const string MikDatabaseFileName = "MIKStore.db";
-        #endregion
 
-        #region CLI Commands
+        // CLI Commands
         internal const string DeleteTracksCommand = "delete-tracks";
         internal const string SyncMikTagsToRekordboxCommand = "sync-mik-tags-to-rekordbox";
         internal const string SyncRekordboxLibraryToMikCommand = "sync-rekordbox-library-to-mik";
         internal const string SyncMikFolderToRekordboxCommand = "sync-mik-folder-to-rekordbox";
-        #endregion
 
-        #region CLI Options
+        // CLI Options
         internal const string DebugOption = "--debug";
         internal const string WhatIfOption = "--what-if";
         internal const string RekordboxXmlOption = "--xml";
@@ -49,14 +54,14 @@
         internal const string MikVersionOption = "--mik-version";
         internal const string ResetMikLibraryOption = "--reset-mik-library";
         internal const string MikFolderOption = "--mik-folder";
-        #endregion
 
-        #region Paths / Environment
+        // Paths / Environment
         internal const string UserProfileVariableName = "USERPROFILE";
         internal const string AppDataFolderName = "AppData";
         internal const string LocalAppDataFolderName = "Local";
         internal const string DefaultTimestampFormat = "yyyyMMdd_HHmmss";
         internal const string ConfigurationFolderName = "Configuration";
-        #endregion
     }
 }
+
+#pragma warning restore SA1600 // Elements should be documented
