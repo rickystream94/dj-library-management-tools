@@ -23,6 +23,7 @@ public sealed class SyncMikFolderToRekordboxHandler
     /// Initializes a new instance of the <see cref="SyncMikFolderToRekordboxHandler"/> class.
     /// </summary>
     /// <param name="library">Rekordbox XML library abstraction.</param>
+    /// <param name="mikDaoFactory">Factory to create an <see cref="IMikDao"/> from a database path.</param>
     /// <param name="log">Logger for console output.</param>
     public SyncMikFolderToRekordboxHandler(RekordboxXmlLibrary library, IMikDaoFactory mikDaoFactory, ILogger log)
     {
